@@ -1,4 +1,6 @@
+#include <android/log.h>
 #include <dirent.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <jni.h>
 #include <signal.h>
@@ -9,6 +11,9 @@
 #include <sys/wait.h>
 #include <termios.h>
 #include <unistd.h>
+
+#define LOG_TAG "termux"
+#define LOGV(...) __android_log_print(ANDROID_LOG_VERBOSE, LOG_TAG, __VA_ARGS__)
 
 #define TERMUX_UNUSED(x) x __attribute__((__unused__))
 #ifdef __APPLE__
@@ -100,11 +105,17 @@ static int create_subprocess(JNIEnv* env,
         // Bootstrap binaries have DT_RUNPATH hardcoded to /data/data/com.termux/
         // which doesn't match this fork's package name.
         const char* prefix = getenv("PREFIX");
+        const char* ld_library_path_env = getenv("LD_LIBRARY_PATH");
+        LOGV("PREFIX=%s", prefix ? prefix : "(null)");
+        LOGV("LD_LIBRARY_PATH (before)=%s", ld_library_path_env ? ld_library_path_env : "(null)");
         if (prefix != NULL) {
             char ld_path[4096];
             snprintf(ld_path, sizeof(ld_path), "%s/lib", prefix);
             setenv("LD_LIBRARY_PATH", ld_path, 1);
         }
+        ld_library_path_env = getenv("LD_LIBRARY_PATH");
+        LOGV("LD_LIBRARY_PATH (after)=%s", ld_library_path_env ? ld_library_path_env : "(null)");
+        LOGV("exec: cmd=%s cwd=%s", cmd, cwd);
 
         if (chdir(cwd) != 0) {
             char* error_message;
@@ -114,6 +125,7 @@ static int create_subprocess(JNIEnv* env,
             fflush(stderr);
         }
         execvp(cmd, argv);
+        LOGV("execvp failed: errno=%d (%s)", errno, strerror(errno));
         // Show terminal output about failing exec() call:
         char* error_message;
         if (asprintf(&error_message, "exec(\"%s\")", cmd) == -1) error_message = "exec()";
