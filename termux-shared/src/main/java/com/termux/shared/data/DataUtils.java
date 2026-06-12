@@ -1,4 +1,4 @@
-package com.sm64builder.shared.data;
+package com.termux.shared.data;
 
 import android.os.Bundle;
 

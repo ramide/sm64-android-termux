@@ -1,4 +1,4 @@
-package com.sm64builder.app.terminal;
+package com.termux.app.terminal;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
@@ -16,21 +16,21 @@ import android.widget.ListView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import com.sm64builder.R;
-import com.sm64builder.shared.interact.ShareUtils;
-import com.sm64builder.shared.termux.shell.command.runner.terminal.TermuxSession;
-import com.sm64builder.shared.termux.interact.TextInputDialogUtils;
-import com.sm64builder.app.TermuxActivity;
-import com.sm64builder.shared.termux.terminal.TermuxTerminalSessionClientBase;
-import com.sm64builder.shared.termux.TermuxConstants;
-import com.sm64builder.app.TermuxService;
-import com.sm64builder.shared.termux.settings.properties.TermuxPropertyConstants;
-import com.sm64builder.shared.termux.terminal.io.BellHandler;
+import com.termux.R;
+import com.termux.shared.interact.ShareUtils;
+import com.termux.shared.termux.shell.command.runner.terminal.TermuxSession;
+import com.termux.shared.termux.interact.TextInputDialogUtils;
+import com.termux.app.TermuxActivity;
+import com.termux.shared.termux.terminal.TermuxTerminalSessionClientBase;
+import com.termux.shared.termux.TermuxConstants;
+import com.termux.app.TermuxService;
+import com.termux.shared.termux.settings.properties.TermuxPropertyConstants;
+import com.termux.shared.termux.terminal.io.BellHandler;
 import com.termux.shared.logger.Logger;
-import com.sm64builder.terminal.TerminalColors;
-import com.sm64builder.terminal.TerminalSession;
-import com.sm64builder.terminal.TerminalSessionClient;
-import com.sm64builder.terminal.TextStyle;
+import com.termux.terminal.TerminalColors;
+import com.termux.terminal.TerminalSession;
+import com.termux.terminal.TerminalSessionClient;
+import com.termux.terminal.TextStyle;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -273,7 +273,7 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
             try {
                 mBellSoundId = mBellSoundPool.load(mActivity, R.raw.bell, 1);
             } catch (Exception e){
-                // Catch java.lang.RuntimeException: Unable to resume activity {com.sm64builder/com.sm64builder.app.TermuxActivity}: android.content.res.Resources$NotFoundException: File res/raw/bell.ogg from drawable resource ID
+                // Catch java.lang.RuntimeException: Unable to resume activity {com.termux/com.termux.app.TermuxActivity}: android.content.res.Resources$NotFoundException: File res/raw/bell.ogg from drawable resource ID
                 Logger.logStackTraceWithMessage(LOG_TAG, "Failed to load bell sound pool", e);
             }
         }

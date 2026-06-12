@@ -1,4 +1,4 @@
-package com.sm64builder.terminal;
+package com.termux.terminal;
 
 public class RectangularAreasTest extends TerminalTestCase {
 

@@ -1,4 +1,4 @@
-package com.sm64builder.shared.file;
+package com.termux.shared.file;
 
 import com.termux.shared.errors.Errno;
 

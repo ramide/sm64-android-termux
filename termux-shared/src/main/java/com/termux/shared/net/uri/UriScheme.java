@@ -1,4 +1,4 @@
-package com.sm64builder.shared.net.uri;
+package com.termux.shared.net.uri;
 
 import android.net.Uri;
 

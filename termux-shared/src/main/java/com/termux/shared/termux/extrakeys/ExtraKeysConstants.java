@@ -1,4 +1,4 @@
-package com.sm64builder.shared.termux.extrakeys;
+package com.termux.shared.termux.extrakeys;
 
 import android.view.KeyEvent;
 

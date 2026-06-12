@@ -1,4 +1,4 @@
-package com.sm64builder.shared.file.filesystem;
+package com.termux.shared.file.filesystem;
 
 /** The {@link Enum} that defines file types. */
 public enum FileType {

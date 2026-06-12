@@ -23,7 +23,7 @@
  * questions.
  */
 
-package com.sm64builder.shared.file.filesystem;
+package com.termux.shared.file.filesystem;
 
 import androidx.annotation.NonNull;
 

@@ -1,4 +1,4 @@
-package com.sm64builder.shared.interact;
+package com.termux.shared.interact;
 
 import android.app.Activity;
 import android.app.AlertDialog;
@@ -10,7 +10,7 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
 
-import com.sm64builder.shared.R;
+import com.termux.shared.R;
 import com.termux.shared.logger.Logger;
 
 public class MessageDialogUtils {

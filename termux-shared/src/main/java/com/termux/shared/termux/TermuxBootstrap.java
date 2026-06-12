@@ -1,4 +1,4 @@
-package com.sm64builder.shared.termux;
+package com.termux.shared.termux;
 
 import android.content.Context;
 
@@ -6,7 +6,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.termux.shared.logger.Logger;
-import com.sm64builder.shared.termux.TermuxConstants.TERMUX_APP;
+import com.termux.shared.termux.TermuxConstants.TERMUX_APP;
 
 public class TermuxBootstrap {
 

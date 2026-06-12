@@ -1,12 +1,12 @@
-package com.sm64builder.shared.file.tests;
+package com.termux.shared.file.tests;
 
 import android.content.Context;
 
 import androidx.annotation.NonNull;
 
 import com.termux.shared.errors.Errno;
-import com.sm64builder.shared.file.FileUtils;
-import com.sm64builder.shared.file.FileUtilsErrno;
+import com.termux.shared.file.FileUtils;
+import com.termux.shared.file.FileUtilsErrno;
 import com.termux.shared.logger.Logger;
 import com.termux.shared.errors.Error;
 

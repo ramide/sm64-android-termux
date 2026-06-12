@@ -1,4 +1,4 @@
-package com.sm64builder.shared.file;
+package com.termux.shared.file;
 
 import android.os.Build;
 import android.system.Os;
@@ -7,9 +7,9 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.google.common.io.RecursiveDeleteOption;
-import com.sm64builder.shared.file.filesystem.FileType;
-import com.sm64builder.shared.file.filesystem.FileTypes;
-import com.sm64builder.shared.data.DataUtils;
+import com.termux.shared.file.filesystem.FileType;
+import com.termux.shared.file.filesystem.FileTypes;
+import com.termux.shared.data.DataUtils;
 import com.termux.shared.logger.Logger;
 import com.termux.shared.errors.Errno;
 import com.termux.shared.errors.Error;

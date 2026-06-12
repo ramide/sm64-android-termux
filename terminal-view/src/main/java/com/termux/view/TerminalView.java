@@ -1,4 +1,4 @@
-package com.sm64builder.view;
+package com.termux.view;
 
 import android.annotation.SuppressLint;
 import android.annotation.TargetApi;
@@ -36,10 +36,10 @@ import android.widget.Scroller;
 import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 
-import com.sm64builder.terminal.KeyHandler;
-import com.sm64builder.terminal.TerminalEmulator;
-import com.sm64builder.terminal.TerminalSession;
-import com.sm64builder.view.textselection.TextSelectionCursorController;
+import com.termux.terminal.KeyHandler;
+import com.termux.terminal.TerminalEmulator;
+import com.termux.terminal.TerminalSession;
+import com.termux.view.textselection.TextSelectionCursorController;
 
 /** View displaying and interacting with a {@link TerminalSession}. */
 public final class TerminalView extends View {
@@ -1094,14 +1094,14 @@ public final class TerminalView extends View {
      * display timeout with double tap and not power button.
      *
      * It should also be called on the
-     * {@link com.sm64builder.terminal.TerminalSessionClient#onTerminalCursorStateChange(boolean)}
+     * {@link com.termux.terminal.TerminalSessionClient#onTerminalCursorStateChange(boolean)}
      * callback when cursor is enabled or disabled so that blinker is disabled if cursor is not
      * to be shown. It should also be checked if activity is visible if blinker is to be started
      * before calling this.
      *
      * It should also be called after terminal is reset with {@link TerminalSession#reset()} in case
      * cursor blinker was disabled before reset due to call to
-     * {@link com.sm64builder.terminal.TerminalSessionClient#onTerminalCursorStateChange(boolean)}.
+     * {@link com.termux.terminal.TerminalSessionClient#onTerminalCursorStateChange(boolean)}.
      *
      * How cursor blinker starting works is by registering a {@link Runnable} with the looper of
      * the main thread of the app which when run, toggles the cursor blinking state and re-registers
@@ -1307,7 +1307,7 @@ public final class TerminalView extends View {
 
         if (mTextSelectionCursorController != null) {
             // Might solve the following exception
-            // android.view.WindowLeaked: Activity com.sm64builder.app.TermuxActivity has leaked window android.widget.PopupWindow
+            // android.view.WindowLeaked: Activity com.termux.app.TermuxActivity has leaked window android.widget.PopupWindow
             stopTextSelectionMode();
 
             getViewTreeObserver().removeOnTouchModeChangeListener(mTextSelectionCursorController);

@@ -24,7 +24,7 @@
  * questions.
  */
 
-package com.sm64builder.shared.file.filesystem;
+package com.termux.shared.file.filesystem;
 
 /**
  * Defines the bits for use with the {@link FileAttributes#permissions()

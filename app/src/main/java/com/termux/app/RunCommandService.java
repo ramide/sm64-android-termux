@@ -1,4 +1,4 @@
-package com.sm64builder.app;
+package com.termux.app;
 
 import android.app.Notification;
 import android.app.NotificationManager;
@@ -10,22 +10,22 @@ import android.content.pm.ServiceInfo;
 import android.os.Build;
 import android.os.IBinder;
 
-import com.sm64builder.R;
-import com.sm64builder.shared.data.DataUtils;
-import com.sm64builder.shared.data.IntentUtils;
-import com.sm64builder.shared.termux.plugins.TermuxPluginUtils;
-import com.sm64builder.shared.termux.file.TermuxFileUtils;
-import com.sm64builder.shared.file.filesystem.FileType;
+import com.termux.R;
+import com.termux.shared.data.DataUtils;
+import com.termux.shared.data.IntentUtils;
+import com.termux.shared.termux.plugins.TermuxPluginUtils;
+import com.termux.shared.termux.file.TermuxFileUtils;
+import com.termux.shared.file.filesystem.FileType;
 import com.termux.shared.errors.Errno;
 import com.termux.shared.errors.Error;
-import com.sm64builder.shared.termux.TermuxConstants;
-import com.sm64builder.shared.termux.TermuxConstants.TERMUX_APP.RUN_COMMAND_SERVICE;
-import com.sm64builder.shared.termux.TermuxConstants.TERMUX_APP.TERMUX_SERVICE;
-import com.sm64builder.shared.file.FileUtils;
+import com.termux.shared.termux.TermuxConstants;
+import com.termux.shared.termux.TermuxConstants.TERMUX_APP.RUN_COMMAND_SERVICE;
+import com.termux.shared.termux.TermuxConstants.TERMUX_APP.TERMUX_SERVICE;
+import com.termux.shared.file.FileUtils;
 import com.termux.shared.logger.Logger;
-import com.sm64builder.shared.notification.NotificationUtils;
-import com.sm64builder.shared.shell.command.ExecutionCommand;
-import com.sm64builder.shared.shell.command.ExecutionCommand.Runner;
+import com.termux.shared.notification.NotificationUtils;
+import com.termux.shared.shell.command.ExecutionCommand;
+import com.termux.shared.shell.command.ExecutionCommand.Runner;
 
 /**
  * A service that receives {@link RUN_COMMAND_SERVICE#ACTION_RUN_COMMAND} intent from third party apps and

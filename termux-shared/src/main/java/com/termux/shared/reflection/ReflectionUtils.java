@@ -1,4 +1,4 @@
-package com.sm64builder.shared.reflection;
+package com.termux.shared.reflection;
 
 import android.os.Build;
 

@@ -2,9 +2,9 @@ package com.termux.shared.net.socket.local;
 
 import androidx.annotation.NonNull;
 
-import com.sm64builder.shared.data.DataUtils;
+import com.termux.shared.data.DataUtils;
 import com.termux.shared.errors.Error;
-import com.sm64builder.shared.jni.models.JniResult;
+import com.termux.shared.jni.models.JniResult;
 import com.termux.shared.logger.Logger;
 import com.termux.shared.markdown.MarkdownUtils;
 

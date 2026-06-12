@@ -1,4 +1,4 @@
-package com.sm64builder.shared.view;
+package com.termux.shared.view;
 
 import android.app.Activity;
 import android.content.Context;

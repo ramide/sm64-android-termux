@@ -1,4 +1,4 @@
-package com.sm64builder.shared.notification;
+package com.termux.shared.notification;
 
 import android.app.Notification;
 import android.app.NotificationChannel;

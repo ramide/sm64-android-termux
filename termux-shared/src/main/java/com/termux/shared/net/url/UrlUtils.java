@@ -1,8 +1,8 @@
-package com.sm64builder.shared.net.url;
+package com.termux.shared.net.url;
 
 import androidx.annotation.Nullable;
 
-import com.sm64builder.shared.data.DataUtils;
+import com.termux.shared.data.DataUtils;
 import com.termux.shared.logger.Logger;
 
 import java.net.MalformedURLException;

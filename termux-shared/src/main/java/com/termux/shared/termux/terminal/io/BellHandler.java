@@ -1,4 +1,4 @@
-package com.sm64builder.shared.termux.terminal.io;
+package com.termux.shared.termux.terminal.io;
 
 import android.content.Context;
 import android.os.Build;

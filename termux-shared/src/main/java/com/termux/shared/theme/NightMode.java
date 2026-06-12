@@ -1,4 +1,4 @@
-package com.sm64builder.shared.theme;
+package com.termux.shared.theme;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;

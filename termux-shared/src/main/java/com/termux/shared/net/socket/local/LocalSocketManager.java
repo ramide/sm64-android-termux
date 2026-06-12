@@ -6,7 +6,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.termux.shared.errors.Error;
-import com.sm64builder.shared.jni.models.JniResult;
+import com.termux.shared.jni.models.JniResult;
 import com.termux.shared.logger.Logger;
 
 /**

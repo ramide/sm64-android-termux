@@ -5,8 +5,8 @@ import android.content.Context;
 import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
 
-import com.sm64builder.shared.android.ProcessUtils;
-import com.sm64builder.shared.android.UserUtils;
+import com.termux.shared.android.ProcessUtils;
+import com.termux.shared.android.UserUtils;
 import com.termux.shared.logger.Logger;
 import com.termux.shared.markdown.MarkdownUtils;
 

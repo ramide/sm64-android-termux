@@ -1,4 +1,4 @@
-package com.sm64builder.app.terminal;
+package com.termux.app.terminal;
 
 import android.annotation.SuppressLint;
 import android.app.AlertDialog;
@@ -17,32 +17,32 @@ import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.Toast;
 
-import com.sm64builder.R;
-import com.sm64builder.app.TermuxActivity;
-import com.sm64builder.shared.file.FileUtils;
-import com.sm64builder.shared.interact.MessageDialogUtils;
-import com.sm64builder.shared.interact.ShareUtils;
-import com.sm64builder.shared.shell.ShellUtils;
-import com.sm64builder.shared.termux.TermuxBootstrap;
-import com.sm64builder.shared.termux.terminal.TermuxTerminalViewClientBase;
-import com.sm64builder.shared.termux.extrakeys.SpecialButton;
-import com.sm64builder.shared.android.AndroidUtils;
-import com.sm64builder.shared.termux.TermuxConstants;
-import com.sm64builder.shared.activities.ReportActivity;
-import com.sm64builder.shared.models.ReportInfo;
-import com.sm64builder.app.models.UserAction;
-import com.sm64builder.app.terminal.io.KeyboardShortcut;
-import com.sm64builder.shared.termux.settings.properties.TermuxPropertyConstants;
-import com.sm64builder.shared.data.DataUtils;
+import com.termux.R;
+import com.termux.app.TermuxActivity;
+import com.termux.shared.file.FileUtils;
+import com.termux.shared.interact.MessageDialogUtils;
+import com.termux.shared.interact.ShareUtils;
+import com.termux.shared.shell.ShellUtils;
+import com.termux.shared.termux.TermuxBootstrap;
+import com.termux.shared.termux.terminal.TermuxTerminalViewClientBase;
+import com.termux.shared.termux.extrakeys.SpecialButton;
+import com.termux.shared.android.AndroidUtils;
+import com.termux.shared.termux.TermuxConstants;
+import com.termux.shared.activities.ReportActivity;
+import com.termux.shared.models.ReportInfo;
+import com.termux.app.models.UserAction;
+import com.termux.app.terminal.io.KeyboardShortcut;
+import com.termux.shared.termux.settings.properties.TermuxPropertyConstants;
+import com.termux.shared.data.DataUtils;
 import com.termux.shared.logger.Logger;
 import com.termux.shared.markdown.MarkdownUtils;
-import com.sm64builder.shared.termux.TermuxUtils;
-import com.sm64builder.shared.termux.data.TermuxUrlUtils;
-import com.sm64builder.shared.view.KeyboardUtils;
-import com.sm64builder.shared.view.ViewUtils;
-import com.sm64builder.terminal.KeyHandler;
-import com.sm64builder.terminal.TerminalEmulator;
-import com.sm64builder.terminal.TerminalSession;
+import com.termux.shared.termux.TermuxUtils;
+import com.termux.shared.termux.data.TermuxUrlUtils;
+import com.termux.shared.view.KeyboardUtils;
+import com.termux.shared.view.ViewUtils;
+import com.termux.terminal.KeyHandler;
+import com.termux.terminal.TerminalEmulator;
+import com.termux.terminal.TerminalSession;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -152,7 +152,7 @@ public class TermuxTerminalViewClient extends TermuxTerminalViewClientBase {
     }
 
     /**
-     * Should be called when {@link com.sm64builder.view.TerminalView#mEmulator} is set
+     * Should be called when {@link com.termux.view.TerminalView#mEmulator} is set
      */
     @Override
     public void onEmulatorSet() {

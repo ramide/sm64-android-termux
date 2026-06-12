@@ -1,4 +1,4 @@
-package com.sm64builder.view;
+package com.termux.view;
 
 import android.content.Context;
 import android.view.GestureDetector;

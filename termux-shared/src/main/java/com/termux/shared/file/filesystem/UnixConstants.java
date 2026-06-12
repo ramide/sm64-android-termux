@@ -26,7 +26,7 @@
  *
  */
 // AUTOMATICALLY GENERATED FILE - DO NOT EDIT
-package com.sm64builder.shared.file.filesystem;
+package com.termux.shared.file.filesystem;
 
 // BEGIN Android-changed: Use constants from android.system.OsConstants. http://b/32203242
 // Those constants are initialized by native code to ensure correctness on different architectures.

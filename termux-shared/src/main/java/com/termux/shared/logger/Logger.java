@@ -8,8 +8,8 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 
-import com.sm64builder.shared.R;
-import com.sm64builder.shared.data.DataUtils;
+import com.termux.shared.R;
+import com.termux.shared.data.DataUtils;
 
 import java.io.IOException;
 import java.io.PrintWriter;

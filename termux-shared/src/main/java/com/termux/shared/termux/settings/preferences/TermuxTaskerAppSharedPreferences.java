@@ -1,16 +1,16 @@
-package com.sm64builder.shared.termux.settings.preferences;
+package com.termux.shared.termux.settings.preferences;
 
 import android.content.Context;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import com.sm64builder.shared.android.PackageUtils;
-import com.sm64builder.shared.settings.preferences.AppSharedPreferences;
-import com.sm64builder.shared.settings.preferences.SharedPreferenceUtils;
-import com.sm64builder.shared.termux.TermuxConstants;
-import com.sm64builder.shared.termux.TermuxUtils;
-import com.sm64builder.shared.termux.settings.preferences.TermuxPreferenceConstants.TERMUX_TASKER_APP;
+import com.termux.shared.android.PackageUtils;
+import com.termux.shared.settings.preferences.AppSharedPreferences;
+import com.termux.shared.settings.preferences.SharedPreferenceUtils;
+import com.termux.shared.termux.TermuxConstants;
+import com.termux.shared.termux.TermuxUtils;
+import com.termux.shared.termux.settings.preferences.TermuxPreferenceConstants.TERMUX_TASKER_APP;
 import com.termux.shared.logger.Logger;
 
 public class TermuxTaskerAppSharedPreferences extends AppSharedPreferences {

@@ -1,4 +1,4 @@
-package com.sm64builder.terminal;
+package com.termux.terminal;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;

@@ -1,4 +1,4 @@
-package com.sm64builder.terminal;
+package com.termux.terminal;
 
 import junit.framework.AssertionFailedError;
 import junit.framework.TestCase;

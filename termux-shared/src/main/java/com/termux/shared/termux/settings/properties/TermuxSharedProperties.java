@@ -1,14 +1,14 @@
-package com.sm64builder.shared.termux.settings.properties;
+package com.termux.shared.termux.settings.properties;
 
 import android.content.Context;
 
 import androidx.annotation.NonNull;
 
 import com.termux.shared.logger.Logger;
-import com.sm64builder.shared.data.DataUtils;
-import com.sm64builder.shared.settings.properties.SharedProperties;
-import com.sm64builder.shared.settings.properties.SharedPropertiesParser;
-import com.sm64builder.shared.termux.TermuxConstants;
+import com.termux.shared.data.DataUtils;
+import com.termux.shared.settings.properties.SharedProperties;
+import com.termux.shared.settings.properties.SharedPropertiesParser;
+import com.termux.shared.termux.TermuxConstants;
 
 import java.io.File;
 import java.util.HashMap;

@@ -1,4 +1,4 @@
-package com.sm64builder.shared.android;
+package com.termux.shared.android;
 
 import android.Manifest;
 import android.content.Context;
@@ -7,9 +7,9 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.termux.shared.logger.Logger;
-import com.sm64builder.shared.shell.command.environment.AndroidShellEnvironment;
-import com.sm64builder.shared.shell.command.ExecutionCommand;
-import com.sm64builder.shared.shell.command.runner.app.AppShell;
+import com.termux.shared.shell.command.environment.AndroidShellEnvironment;
+import com.termux.shared.shell.command.ExecutionCommand;
+import com.termux.shared.shell.command.runner.app.AppShell;
 
 /**
  * Utils for phantom processes added in android 12.

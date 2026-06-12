@@ -2,7 +2,7 @@ package com.termux.shared.net.socket.local;
 
 import androidx.annotation.NonNull;
 
-import com.sm64builder.shared.file.FileUtils;
+import com.termux.shared.file.FileUtils;
 import com.termux.shared.logger.Logger;
 import com.termux.shared.markdown.MarkdownUtils;
 

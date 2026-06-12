@@ -1,4 +1,4 @@
-package com.sm64builder.app.terminal.io;
+package com.termux.app.terminal.io;
 
 public class KeyboardShortcut {
 

@@ -1,4 +1,4 @@
-package com.sm64builder.shared;
+package com.termux.shared;
 
 import android.content.Context;
 

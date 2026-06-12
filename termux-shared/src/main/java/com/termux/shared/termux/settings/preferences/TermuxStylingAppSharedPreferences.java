@@ -1,4 +1,4 @@
-package com.sm64builder.shared.termux.settings.preferences;
+package com.termux.shared.termux.settings.preferences;
 
 import android.content.Context;
 
@@ -6,12 +6,12 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.termux.shared.logger.Logger;
-import com.sm64builder.shared.android.PackageUtils;
-import com.sm64builder.shared.settings.preferences.AppSharedPreferences;
-import com.sm64builder.shared.settings.preferences.SharedPreferenceUtils;
-import com.sm64builder.shared.termux.TermuxUtils;
-import com.sm64builder.shared.termux.settings.preferences.TermuxPreferenceConstants.TERMUX_STYLING_APP;
-import com.sm64builder.shared.termux.TermuxConstants;
+import com.termux.shared.android.PackageUtils;
+import com.termux.shared.settings.preferences.AppSharedPreferences;
+import com.termux.shared.settings.preferences.SharedPreferenceUtils;
+import com.termux.shared.termux.TermuxUtils;
+import com.termux.shared.termux.settings.preferences.TermuxPreferenceConstants.TERMUX_STYLING_APP;
+import com.termux.shared.termux.TermuxConstants;
 
 public class TermuxStylingAppSharedPreferences extends AppSharedPreferences {
 

@@ -1,6 +1,6 @@
-package com.sm64builder.app;
+package com.termux.app;
 
-import com.sm64builder.shared.termux.data.TermuxUrlUtils;
+import com.termux.shared.termux.data.TermuxUrlUtils;
 
 import org.junit.Assert;
 import org.junit.Test;

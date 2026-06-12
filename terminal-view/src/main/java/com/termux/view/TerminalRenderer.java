@@ -1,15 +1,15 @@
-package com.sm64builder.view;
+package com.termux.view;
 
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.PorterDuff;
 import android.graphics.Typeface;
 
-import com.sm64builder.terminal.TerminalBuffer;
-import com.sm64builder.terminal.TerminalEmulator;
-import com.sm64builder.terminal.TerminalRow;
-import com.sm64builder.terminal.TextStyle;
-import com.sm64builder.terminal.WcWidth;
+import com.termux.terminal.TerminalBuffer;
+import com.termux.terminal.TerminalEmulator;
+import com.termux.terminal.TerminalRow;
+import com.termux.terminal.TextStyle;
+import com.termux.terminal.WcWidth;
 
 /**
  * Renderer of a {@link TerminalEmulator} into a {@link Canvas}.

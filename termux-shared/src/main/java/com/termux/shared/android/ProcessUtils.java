@@ -1,4 +1,4 @@
-package com.sm64builder.shared.android;
+package com.termux.shared.android;
 
 import android.app.ActivityManager;
 import android.content.Context;
