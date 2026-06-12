@@ -182,7 +182,7 @@ def downloadBootstrap(String arch, String expectedChecksum, String version) {
         }
     }
 
-    def remoteUrl = "https://github.com/izzy2fancy/termux-packages/releases/download/Bootstrap-SM64-Builder/bootstrap-" + arch + ".zip"
+    def remoteUrl = "https://github.com/izzy2fancy/termux-packages/releases/download/1.0/bootstrap-" + arch + ".zip"
     logger.quiet("Downloading " + remoteUrl + " ...")
 
     file.parentFile.mkdirs()
@@ -215,10 +215,10 @@ task downloadBootstraps() {
         def packageVariant = project.ext.packageVariant
         if (packageVariant == "apt-android-7") {
             def version = "2023.07.13-r2" + "+" + packageVariant
-            downloadBootstrap("aarch64", "1f1339e4efe2bce4e5a9a4f8003c3a6833a1637a2d2e527f73f0512ccb25b31e", version)
-            downloadBootstrap("arm", "d9ebc60bd036b1908315550067fb6366c2c53dfe94d7b549fae5b8b1da284910", version)
-            downloadBootstrap("i686", "7904035d7e11faccfec0c7441f8788ba6ce76c3ce22ae6c2764e572796aecd66", version)
-            downloadBootstrap("x86_64", "893f5f1069be76157d01869d0cb16f82618c152a1575915149d360220e7e1880", version)
+            downloadBootstrap("aarch64", "63e39dc40d323e9c17066bb46ced395a57999835793b40125f2a734aed78674d", version)
+            downloadBootstrap("arm", "9557ef55534218bef9166e75c838816ace7e021598993e2fb038ca887af5a460", version)
+            downloadBootstrap("i686", "2897d22897b91d8204c450e996d272dbfbd484c698f7861ba71cfda825ff0898", version)
+            downloadBootstrap("x86_64", "94c0fae64d4afc7b775ac0487de2dcdd830b4caadf246109767a324a25095554", version)
         } else if (packageVariant == "apt-android-5") {
             def version = "2022.04.28-r6" + "+" + packageVariant
             downloadBootstrap("aarch64", "e62352a6d2d1b0b0499eec44d482bb3d169c636577119a01b3000de554918f92", version)
