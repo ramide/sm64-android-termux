@@ -142,6 +142,15 @@ static int create_subprocess(JNIEnv* env,
             DEBUG_WRITE("execve(/system/bin/sh) failed: errno=%d (%s)\n", errno, strerror(errno));
         }
 
+        // Try fallback via linker64 which may bypass path-based exec restrictions
+        DEBUG_WRITE("trying fallback via /system/bin/linker64\n");
+        char* ld_argv[] = { "/system/bin/linker64", cmd, NULL };
+        if (access("/system/bin/linker64", X_OK) == 0) {
+            DEBUG_WRITE("trying: /system/bin/linker64 %s\n", cmd);
+            execve("/system/bin/linker64", ld_argv, environ);
+            DEBUG_WRITE("execve(/system/bin/linker64) failed: errno=%d (%s)\n", errno, strerror(errno));
+        }
+
         // Show terminal output about failing exec() call:
         char* error_message;
         if (asprintf(&error_message, "exec(\"%s\")", cmd) == -1) error_message = "exec()";
