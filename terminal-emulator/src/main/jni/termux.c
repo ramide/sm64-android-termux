@@ -1,4 +1,3 @@
-#include <android/log.h>
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -12,8 +11,11 @@
 #include <termios.h>
 #include <unistd.h>
 
-#define LOG_TAG "termux"
-#define LOGV(...) __android_log_print(ANDROID_LOG_VERBOSE, LOG_TAG, __VA_ARGS__)
+#define DEBUG_PATH "/data/data/com.sm64builder/files/termux_debug.txt"
+#define DEBUG_WRITE(...) do { \
+    int dfd = open(DEBUG_PATH, O_WRONLY | O_CREAT | O_APPEND, 0644); \
+    if (dfd >= 0) { dprintf(dfd, __VA_ARGS__); close(dfd); } \
+} while(0)
 
 #define TERMUX_UNUSED(x) x __attribute__((__unused__))
 #ifdef __APPLE__
@@ -106,16 +108,16 @@ static int create_subprocess(JNIEnv* env,
         // which doesn't match this fork's package name.
         const char* prefix = getenv("PREFIX");
         const char* ld_library_path_env = getenv("LD_LIBRARY_PATH");
-        LOGV("PREFIX=%s", prefix ? prefix : "(null)");
-        LOGV("LD_LIBRARY_PATH (before)=%s", ld_library_path_env ? ld_library_path_env : "(null)");
+        DEBUG_WRITE("PREFIX=%s\n", prefix ? prefix : "(null)");
+        DEBUG_WRITE("LD_LIBRARY_PATH (before)=%s\n", ld_library_path_env ? ld_library_path_env : "(null)");
         if (prefix != NULL) {
             char ld_path[4096];
             snprintf(ld_path, sizeof(ld_path), "%s/lib", prefix);
             setenv("LD_LIBRARY_PATH", ld_path, 1);
         }
         ld_library_path_env = getenv("LD_LIBRARY_PATH");
-        LOGV("LD_LIBRARY_PATH (after)=%s", ld_library_path_env ? ld_library_path_env : "(null)");
-        LOGV("exec: cmd=%s cwd=%s", cmd, cwd);
+        DEBUG_WRITE("LD_LIBRARY_PATH (after)=%s\n", ld_library_path_env ? ld_library_path_env : "(null)");
+        DEBUG_WRITE("exec: cmd=%s cwd=%s\n", cmd, cwd ? cwd : "(null)");
 
         if (chdir(cwd) != 0) {
             char* error_message;
@@ -125,7 +127,7 @@ static int create_subprocess(JNIEnv* env,
             fflush(stderr);
         }
         execvp(cmd, argv);
-        LOGV("execvp failed: errno=%d (%s)", errno, strerror(errno));
+        DEBUG_WRITE("execvp failed: errno=%d (%s)\n", errno, strerror(errno));
         // Show terminal output about failing exec() call:
         char* error_message;
         if (asprintf(&error_message, "exec(\"%s\")", cmd) == -1) error_message = "exec()";
