@@ -99,11 +99,11 @@ static int create_subprocess(JNIEnv* env,
         // Ensure LD_LIBRARY_PATH is set from PREFIX as a fallback.
         // Bootstrap binaries have DT_RUNPATH hardcoded to /data/data/com.termux/
         // which doesn't match this fork's package name.
-        char ld_library_path[4096];
         const char* prefix = getenv("PREFIX");
         if (prefix != NULL) {
-            snprintf(ld_library_path, sizeof(ld_library_path), "LD_LIBRARY_PATH=%s/lib", prefix);
-            putenv(ld_library_path);
+            char ld_path[4096];
+            snprintf(ld_path, sizeof(ld_path), "%s/lib", prefix);
+            setenv("LD_LIBRARY_PATH", ld_path, 1);
         }
 
         if (chdir(cwd) != 0) {
