@@ -5,9 +5,11 @@ on:
   push:
     branches:
       - master
+      - sm64-builder
   pull_request:
     branches:
       - master
+      - sm64-builder
 
 jobs:
   build:
