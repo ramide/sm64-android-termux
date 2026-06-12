@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 
 <!DOCTYPE resources [
-    <!ENTITY TERMUX_PACKAGE_NAME "com.am2rbuilder">
-    <!ENTITY TERMUX_APP_NAME "AM2R Builder">
+    <!ENTITY TERMUX_PACKAGE_NAME "com.sm64builder">
+    <!ENTITY TERMUX_APP_NAME "SM64 Builder">
     <!ENTITY TERMUX_API_APP_NAME "Termux:API">
     <!ENTITY TERMUX_BOOT_APP_NAME "Termux:Boot">
     <!ENTITY TERMUX_FLOAT_APP_NAME "Termux:Float">
