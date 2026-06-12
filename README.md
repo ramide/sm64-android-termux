@@ -43,7 +43,7 @@ The external SM64EX builds need the base.zip moved to Android/data/files/res/ th
 Please consider sponsoring me so I can continue working on this and other projects. Thank you!
 
 
-**Termux users! You must uninstall termux before installing.**
+**Termux users:** Unlike the original SM64 Builder, this fork uses a separate package name (`com.sm64builder`) and can co-exist with the official Termux app on the same device.
 
 
 
