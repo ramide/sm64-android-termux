@@ -96,6 +96,16 @@ static int create_subprocess(JNIEnv* env,
         clearenv();
         if (envp) for (; *envp; ++envp) putenv(*envp);
 
+        // Ensure LD_LIBRARY_PATH is set from PREFIX as a fallback.
+        // Bootstrap binaries have DT_RUNPATH hardcoded to /data/data/com.termux/
+        // which doesn't match this fork's package name.
+        char ld_library_path[4096];
+        const char* prefix = getenv("PREFIX");
+        if (prefix != NULL) {
+            snprintf(ld_library_path, sizeof(ld_library_path), "LD_LIBRARY_PATH=%s/lib", prefix);
+            putenv(ld_library_path);
+        }
+
         if (chdir(cwd) != 0) {
             char* error_message;
             // No need to free asprintf()-allocated memory since doing execvp() or exit() below.

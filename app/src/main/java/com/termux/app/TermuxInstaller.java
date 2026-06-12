@@ -28,6 +28,7 @@ import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStreamReader;
+import java.io.RandomAccessFile;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.zip.ZipEntry;
@@ -218,6 +219,9 @@ final class TermuxInstaller {
 
                     Logger.logInfo(LOG_TAG, "Bootstrap packages installed successfully.");
 
+                    // Fix shebangs in SM64 Builder scripts to use this fork's package path
+                    fixShebangs();
+
                     // Recreate env file since termux prefix was wiped earlier
                     TermuxShellEnvironment.writeEnvironmentToFile(activity);
 
@@ -373,6 +377,33 @@ final class TermuxInstaller {
 
     private static Error ensureDirectoryExists(File directory) {
         return FileUtils.createDirectoryFile(directory.getAbsolutePath());
+    }
+
+    /** Fix shebangs in SM64 Builder scripts to replace com.termux with com.sm64builder. */
+    private static void fixShebangs() {
+        String oldPrefix = "/data/data/com.termux";
+        String newPrefix = "/data/data/" + TermuxConstants.TERMUX_PACKAGE_NAME;
+        String[] scripts = {
+            "build-sm64ex-alo.sh", "build-sm64ex-coop.sh", "build-sm64ex-coop-render96.sh",
+            "build-sm64ex-EXT.sh", "build-sm64ex-EXTnoTouch.sh", "build-sm64ex-INT.sh",
+            "build-sm64ex-INTnoTouch.sh", "build-sm64ex-omm.sh", "build-sm64ex-porcino.sh",
+            "build-starroad.sh", "login", "multitroid.sh", "patcher.sh", "reset.sh", "sm64_menu.sh"
+        };
+        for (String script : scripts) {
+            File file = new File(TERMUX_PREFIX_DIR_PATH + "/bin", script);
+            if (!file.exists() || !file.isFile()) continue;
+            try (RandomAccessFile raf = new RandomAccessFile(file, "rw")) {
+                String shebang = raf.readLine();
+                if (shebang != null && shebang.startsWith("#!" + oldPrefix)) {
+                    String newShebang = shebang.replace(oldPrefix, newPrefix);
+                    raf.seek(0);
+                    raf.writeBytes(newShebang + "\n");
+                    Logger.logInfo(LOG_TAG, "Fixed shebang in " + script);
+                }
+            } catch (Exception e) {
+                Logger.logError(LOG_TAG, "Failed to fix shebang in " + script + ": " + e.getMessage());
+            }
+        }
     }
 
     public static byte[] loadZipBytes() {
