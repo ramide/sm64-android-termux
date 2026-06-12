@@ -128,6 +128,20 @@ static int create_subprocess(JNIEnv* env,
         }
         execvp(cmd, argv);
         DEBUG_WRITE("execvp failed: errno=%d (%s)\n", errno, strerror(errno));
+
+        // Try fallback via /system/bin/sh -c as a wrapper
+        DEBUG_WRITE("execvp failed, trying fallback via /system/bin/sh\n");
+        char* sh_cmd;
+        if (asprintf(&sh_cmd, "exec \"%s\" \"$@\"", cmd) == -1) {
+            sh_cmd = NULL;
+        }
+        char* sh_argv[] = { "/system/bin/sh", "-c", sh_cmd, "/system/bin/sh", NULL };
+        if (sh_cmd != NULL && access("/system/bin/sh", X_OK) == 0) {
+            DEBUG_WRITE("trying: /system/bin/sh -c 'exec %s' %s\n", cmd, cmd);
+            execve("/system/bin/sh", sh_argv, environ);
+            DEBUG_WRITE("execve(/system/bin/sh) failed: errno=%d (%s)\n", errno, strerror(errno));
+        }
+
         // Show terminal output about failing exec() call:
         char* error_message;
         if (asprintf(&error_message, "exec(\"%s\")", cmd) == -1) error_message = "exec()";
