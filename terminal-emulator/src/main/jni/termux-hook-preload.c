@@ -54,6 +54,12 @@ static int is_app_data_path(const char* path) {
     return path && strncmp(path, APP_DATA_PREFIX, prefix_len) == 0;
 }
 
+// Helper: check if path is in the old Termux data directory
+static int is_old_termux_path(const char* path) {
+    size_t prefix_len = strlen(OLD_TERMUX_PREFIX);
+    return path && strncmp(path, OLD_TERMUX_PREFIX, prefix_len) == 0;
+}
+
 // Remap /data/data/com.termux -> /data/data/com.sm64builder in file paths.
 // Returns the original path if no remapping needed, otherwise writes to buf.
 static const char* remap_path(const char* path, char* buf, size_t size) {
@@ -289,6 +295,14 @@ DIR *opendir(const char *name) {
 
 // Intercepted execve
 int execve(const char* pathname, char* const argv[], char* const envp[]) {
+    // Remap old Termux paths to current package path
+    char remapped[4096];
+    if (is_old_termux_path(pathname)) {
+        snprintf(remapped, sizeof(remapped), "%s%s", APP_DATA_PREFIX,
+                 pathname + strlen(OLD_TERMUX_PREFIX));
+        pathname = remapped;
+    }
+
     if (!real_execve) {
         real_execve = (execve_func_t)dlsym(RTLD_NEXT, "execve");
         if (!real_execve) _exit(127);
@@ -328,6 +342,14 @@ int execve(const char* pathname, char* const argv[], char* const envp[]) {
 
 // Intercepted execvp — handles PATH-relative lookups
 int execvp(const char* file, char* const argv[]) {
+    // Remap old Termux paths to current package path
+    char remapped[4096];
+    if (file && is_old_termux_path(file)) {
+        snprintf(remapped, sizeof(remapped), "%s%s", APP_DATA_PREFIX,
+                 file + strlen(OLD_TERMUX_PREFIX));
+        file = remapped;
+    }
+
     static execvp_func_t real_execvp = NULL;
     if (!real_execvp) {
         real_execvp = (execvp_func_t)dlsym(RTLD_NEXT, "execvp");
