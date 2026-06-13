@@ -111,6 +111,7 @@ final class TermuxInstaller {
                 // Re-apply fixes in case they were from an older version
                 fixPrefixPaths();
                 setupAptConfig();
+                setupDpkgConfig();
                 fixApkPermissions();
                 copyExecHookLibrary(activity);
                 whenDone.run();
@@ -229,6 +230,9 @@ final class TermuxInstaller {
 
                     // Setup apt config to use this fork's package path
                     setupAptConfig();
+
+                    // Setup dpkg config to use this fork's package path
+                    setupDpkgConfig();
 
                     // Make APK files read-only (Android 16 blocks writable dex files)
                     fixApkPermissions();
@@ -466,7 +470,8 @@ final class TermuxInstaller {
         String content = "Dir \"" + prefix + "\";\n"
             + "Dir::State \"var/lib/apt\";\n"
             + "Dir::Cache \"var/cache/apt\";\n"
-            + "Dir::Etc \"etc/apt\";\n";
+            + "Dir::Etc \"etc/apt\";\n"
+            + "Dir::Bin::Methods \"lib/apt/methods\";\n";
         try (java.io.FileOutputStream fos = new java.io.FileOutputStream(configFile)) {
             fos.write(content.getBytes("UTF-8"));
             Logger.logInfo(LOG_TAG, "Created apt config override at " + configFile.getAbsolutePath());
@@ -475,7 +480,26 @@ final class TermuxInstaller {
         }
     }
 
-    /** Make APK files read-only (Android 16 blocks loading writable dex files). */
+    /** Create dpkg config override so dpkg uses this fork's package path instead of compiled-in defaults. */
+    private static void setupDpkgConfig() {
+        String dpkgCfgDir = TermuxConstants.TERMUX_PREFIX_DIR_PATH + "/etc/dpkg/dpkg.cfg.d";
+        File cfgDir = new File(dpkgCfgDir);
+        if (!cfgDir.isDirectory() && !cfgDir.mkdirs()) {
+            Logger.logError(LOG_TAG, "Failed to create dpkg config dir");
+            return;
+        }
+        File configFile = new File(dpkgCfgDir, "00prefix.conf");
+        if (configFile.exists()) return;
+
+        String admindir = TermuxConstants.TERMUX_PREFIX_DIR_PATH + "/var/lib/dpkg";
+        String content = "admindir " + admindir + "\n";
+        try (java.io.FileOutputStream fos = new java.io.FileOutputStream(configFile)) {
+            fos.write(content.getBytes("UTF-8"));
+            Logger.logInfo(LOG_TAG, "Created dpkg config override at " + configFile.getAbsolutePath());
+        } catch (Exception e) {
+            Logger.logError(LOG_TAG, "Failed to create dpkg config override: " + e.getMessage());
+        }
+    }
     private static void fixApkPermissions() {
         File libexecDir = new File(TERMUX_PREFIX_DIR_PATH + "/libexec");
         if (!libexecDir.isDirectory()) return;
