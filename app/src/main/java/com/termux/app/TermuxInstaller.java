@@ -486,8 +486,10 @@ final class TermuxInstaller {
                 + "Dir::Bin::dpkg \"" + prefix + "/bin/dpkg\";\n"
                 + "gpgv::Bin \"" + prefix + "/bin/gpgv\";\n"
                 + "Acquire::https::CaInfo \"" + prefix + "/etc/tls/cert.pem\";\n"
+                + "Acquire::AllowInsecureRepositories \"true\";\n"
+                + "Acquire::AllowDowngradeToInsecureRepositories \"true\";\n"
                 + "DPkg::Options:: \"--admindir=" + prefix + "/var/lib/dpkg\";\n"
-                + "DPkg::Options:: \"--instdir=" + prefix + "\";\n";
+                + "DPkg::Path \"" + prefix + "/bin:/system/bin\";\n";
             try (java.io.FileOutputStream fos = new java.io.FileOutputStream(configFile)) {
                 fos.write(content.getBytes("UTF-8"));
                 Logger.logInfo(LOG_TAG, "Created apt config override at " + configFile.getAbsolutePath());
