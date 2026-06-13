@@ -110,6 +110,7 @@ final class TermuxInstaller {
             } else {
                 // Re-apply fixes in case they were from an older version
                 fixPrefixPaths();
+                setupAptConfig();
                 copyExecHookLibrary(activity);
                 whenDone.run();
                 return;
@@ -224,6 +225,9 @@ final class TermuxInstaller {
 
                     // Fix hardcoded /data/data/com.termux paths to use this fork's package path
                     fixPrefixPaths();
+
+                    // Setup apt config to use this fork's package path
+                    setupAptConfig();
 
                     // Copy LD_PRELOAD hook library from APK native libs to $PREFIX/lib
                     copyExecHookLibrary(activity);
@@ -440,6 +444,30 @@ final class TermuxInstaller {
             Logger.logInfo(LOG_TAG, "Fixed paths in " + file.getAbsolutePath());
         } catch (Exception e) {
             Logger.logError(LOG_TAG, "Failed to fix paths in " + file.getAbsolutePath() + ": " + e.getMessage());
+        }
+    }
+
+    /** Create apt config override so apt uses this fork's paths instead of compiled-in defaults. */
+    private static void setupAptConfig() {
+        String aptConfDir = TermuxConstants.TERMUX_PREFIX_DIR_PATH + "/etc/apt/apt.conf.d";
+        File confDir = new File(aptConfDir);
+        if (!confDir.isDirectory() && !confDir.mkdirs()) {
+            Logger.logError(LOG_TAG, "Failed to create apt config dir");
+            return;
+        }
+        File configFile = new File(aptConfDir, "00sm64builder.conf");
+        if (configFile.exists()) return;
+
+        String prefix = TermuxConstants.TERMUX_PREFIX_DIR_PATH;
+        String content = "Dir \"" + prefix + "\";\n"
+            + "Dir::State \"var/lib/apt\";\n"
+            + "Dir::Cache \"var/cache/apt\";\n"
+            + "Dir::Etc \"etc/apt\";\n";
+        try (java.io.FileOutputStream fos = new java.io.FileOutputStream(configFile)) {
+            fos.write(content.getBytes("UTF-8"));
+            Logger.logInfo(LOG_TAG, "Created apt config override at " + configFile.getAbsolutePath());
+        } catch (Exception e) {
+            Logger.logError(LOG_TAG, "Failed to create apt config override: " + e.getMessage());
         }
     }
 
