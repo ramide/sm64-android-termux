@@ -473,25 +473,40 @@ final class TermuxInstaller {
             return;
         }
         File configFile = new File(aptConfDir, "00sm64builder.conf");
-        if (configFile.exists()) return;
-
-        String prefix = TermuxConstants.TERMUX_PREFIX_DIR_PATH;
-        String content = "Dir \"" + prefix + "\";\n"
-            + "Dir::State \"" + prefix + "/var/lib/apt\";\n"
-            + "Dir::Cache \"" + prefix + "/var/cache/apt\";\n"
-            + "Dir::Etc \"" + prefix + "/etc/apt\";\n"
-            + "Dir::Temp \"" + prefix + "/tmp\";\n"
-            + "Dir::Bin::Methods \"" + prefix + "/lib/apt/methods\";\n"
-            + "Dir::Bin::apt-key \"" + prefix + "/bin/apt-key\";\n"
-            + "Dir::Bin::dpkg \"" + prefix + "/bin/dpkg\";\n"
-            + "gpgv::Bin \"" + prefix + "/bin/gpgv\";\n"
-            + "Acquire::https::CaInfo \"" + prefix + "/etc/tls/cert.pem\";\n";
-        try (java.io.FileOutputStream fos = new java.io.FileOutputStream(configFile)) {
-            fos.write(content.getBytes("UTF-8"));
-            Logger.logInfo(LOG_TAG, "Created apt config override at " + configFile.getAbsolutePath());
-        } catch (Exception e) {
-            Logger.logError(LOG_TAG, "Failed to create apt config override: " + e.getMessage());
+        if (!configFile.exists()) {
+            String prefix = TermuxConstants.TERMUX_PREFIX_DIR_PATH;
+            String content = "Dir \"" + prefix + "\";\n"
+                + "Dir::State \"" + prefix + "/var/lib/apt\";\n"
+                + "Dir::Cache \"" + prefix + "/var/cache/apt\";\n"
+                + "Dir::Etc \"" + prefix + "/etc/apt\";\n"
+                + "Dir::Etc::TrustedParts \"trusted.gpg.d\";\n"
+                + "Dir::Temp \"" + prefix + "/tmp\";\n"
+                + "Dir::Bin::Methods \"" + prefix + "/lib/apt/methods\";\n"
+                + "Dir::Bin::apt-key \"" + prefix + "/bin/apt-key\";\n"
+                + "Dir::Bin::dpkg \"" + prefix + "/bin/dpkg\";\n"
+                + "gpgv::Bin \"" + prefix + "/bin/gpgv\";\n"
+                + "Acquire::https::CaInfo \"" + prefix + "/etc/tls/cert.pem\";\n";
+            try (java.io.FileOutputStream fos = new java.io.FileOutputStream(configFile)) {
+                fos.write(content.getBytes("UTF-8"));
+                Logger.logInfo(LOG_TAG, "Created apt config override at " + configFile.getAbsolutePath());
+            } catch (Exception e) {
+                Logger.logError(LOG_TAG, "Failed to create apt config override: " + e.getMessage());
+            }
         }
+
+        // Reset sources.list to official repo with trusted=yes
+        File sourcesList = new File(TermuxConstants.TERMUX_PREFIX_DIR_PATH + "/etc/apt/sources.list");
+        String sourcesContent = "deb [trusted=yes] https://packages.termux.dev/apt/termux-main/ stable main\n";
+        try (java.io.FileOutputStream fos = new java.io.FileOutputStream(sourcesList)) {
+            fos.write(sourcesContent.getBytes("UTF-8"));
+            Logger.logInfo(LOG_TAG, "Reset sources.list");
+        } catch (Exception e) {
+            Logger.logError(LOG_TAG, "Failed to reset sources.list: " + e.getMessage());
+        }
+
+        // Create apt cache directories
+        new File(TermuxConstants.TERMUX_PREFIX_DIR_PATH + "/var/cache/apt/archives/partial").mkdirs();
+        new File(TermuxConstants.TERMUX_PREFIX_DIR_PATH + "/var/lib/apt/lists/partial").mkdirs();
     }
 
     /** Create dpkg config override so dpkg uses this fork's package path instead of compiled-in defaults. */
