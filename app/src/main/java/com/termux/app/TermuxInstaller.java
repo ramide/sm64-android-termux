@@ -484,6 +484,7 @@ final class TermuxInstaller {
             + "Dir::Bin::Methods \"" + prefix + "/lib/apt/methods\";\n"
             + "Dir::Bin::apt-key \"" + prefix + "/bin/apt-key\";\n"
             + "Dir::Bin::dpkg \"" + prefix + "/bin/dpkg\";\n"
+            + "gpgv::Bin \"" + prefix + "/bin/gpgv\";\n"
             + "Acquire::https::CaInfo \"" + prefix + "/etc/tls/cert.pem\";\n";
         try (java.io.FileOutputStream fos = new java.io.FileOutputStream(configFile)) {
             fos.write(content.getBytes("UTF-8"));
