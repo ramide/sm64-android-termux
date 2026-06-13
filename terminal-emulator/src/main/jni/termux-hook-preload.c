@@ -27,6 +27,11 @@
 #include <sys/time.h>
 #include <unistd.h>
 
+// Fallback if NDK doesn't define SYS_readlinkat (ARM64 Linux syscall #78)
+#ifndef SYS_readlinkat
+#define SYS_readlinkat 78
+#endif
+
 // The app data directory prefix we check against
 #define APP_DATA_PREFIX "/data/data/com.sm64builder"
 
@@ -494,8 +499,13 @@ static ssize_t resolve_proc_self_exe(const char* pathname, char* real_exe, size_
     char* path_env = getenv("PATH");
     if (!path_env) return 0;
 
+    // Copy PATH before tokenizing (strtok_r modifies in-place)
+    char path_copy[4096];
+    strncpy(path_copy, path_env, sizeof(path_copy) - 1);
+    path_copy[sizeof(path_copy) - 1] = '\0';
+
     char* save = NULL;
-    char* tok = strtok_r(path_env, ":", &save);
+    char* tok = strtok_r(path_copy, ":", &save);
     while (tok) {
         char candidate[4096];
         snprintf(candidate, sizeof(candidate), "%s/%s", tok, argv0);
