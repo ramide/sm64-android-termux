@@ -90,16 +90,6 @@ public class TermuxShellEnvironment extends AndroidShellEnvironment {
             // Bootstrap binaries have DT_RUNPATH hardcoded to /data/data/com.termux/files/usr/lib
             // which doesn't match this fork's package name. Always set LD_LIBRARY_PATH explicitly.
             environment.put(ENV_LD_LIBRARY_PATH, TermuxConstants.TERMUX_LIB_PREFIX_DIR_PATH);
-
-            // On Android 16+, execve() from app data dirs is blocked. We work
-            // around this by routing all executions through /system/bin/linker64.
-            // Wrapper scripts are placed in $PREFIX/bin/.wrappers/ during bootstrap.
-            // Prepend that directory to PATH so commands are found there first.
-            String wrappersDir = TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/.wrappers";
-            if (new java.io.File(wrappersDir).isDirectory()) {
-                String currentPath = environment.get(ENV_PATH);
-                environment.put(ENV_PATH, wrappersDir + ":" + currentPath);
-            }
         }
 
         return environment;
