@@ -222,6 +222,9 @@ final class TermuxInstaller {
                     // Fix shebangs in SM64 Builder scripts to use this fork's package path
                     fixShebangs();
 
+                    // Create exec wrappers for Android 16+ (run commands via linker64)
+                    createExecWrappers();
+
                     // Recreate env file since termux prefix was wiped earlier
                     TermuxShellEnvironment.writeEnvironmentToFile(activity);
 
@@ -402,6 +405,58 @@ final class TermuxInstaller {
                 }
             } catch (Exception e) {
                 Logger.logError(LOG_TAG, "Failed to fix shebang in " + script + ": " + e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Create exec wrappers for all binaries in $PREFIX/bin.
+     *
+     * On Android 16+, the kernel blocks execve() for binaries inside app data dirs.
+     * The workaround is to redirect all executions through /system/bin/linker64,
+     * which is a system binary and can be exec'd freely. The linker then opens the
+     * target binary via open()+mmap (not execve), bypassing the restriction.
+     *
+     * This creates a small shell script per binary that invokes linker64 instead
+     * of executing the binary directly.
+     */
+    private static void createExecWrappers() {
+        String binDir = TERMUX_PREFIX_DIR_PATH + "/bin";
+        File binDirFile = new File(binDir);
+        File[] executables = binDirFile.listFiles();
+        if (executables == null) return;
+
+        String wrapperContent = "#!/system/bin/sh\nd=$(dirname \"$0\"); b=$(basename \"$0\"); exec /system/bin/linker64 \"$d/.${b}.orig\" \"$@\"\n";
+
+        for (File exe : executables) {
+            if (!exe.isFile() || !exe.canExecute()) continue;
+            String name = exe.getName();
+            // Skip the wrapper script itself and system-symlinked entries
+            if (name.startsWith(".")) continue;
+
+            File wrapper = new File(binDir, "." + name + ".wrp");
+            try (FileOutputStream fos = new FileOutputStream(wrapper)) {
+                fos.write(wrapperContent.getBytes("UTF-8"));
+            } catch (Exception e) {
+                Logger.logError(LOG_TAG, "Failed to create wrapper for " + name + ": " + e.getMessage());
+                continue;
+            }
+            wrapper.setExecutable(true, true);
+
+            // Swap the original with the wrapper pattern
+            // Rename original:  ls -> .ls.orig
+            // Move wrapper:     .ls.wrp -> ls
+            File renamed = new File(binDir, "." + name + ".orig");
+            if (exe.renameTo(renamed)) {
+                if (wrapper.renameTo(exe)) {
+                    Logger.logVerbose(LOG_TAG, "Wrapped " + name);
+                } else {
+                    // Restore original if wrapper rename fails
+                    renamed.renameTo(exe);
+                    wrapper.delete();
+                }
+            } else {
+                wrapper.delete();
             }
         }
     }
