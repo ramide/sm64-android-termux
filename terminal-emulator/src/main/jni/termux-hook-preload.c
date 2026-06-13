@@ -17,8 +17,10 @@
 #define _GNU_SOURCE
 #include <dlfcn.h>
 #include <fcntl.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 // The app data directory prefix we check against
@@ -44,6 +46,17 @@ extern char **environ;
 static int is_app_data_path(const char* path) {
     size_t prefix_len = strlen(APP_DATA_PREFIX);
     return path && strncmp(path, APP_DATA_PREFIX, prefix_len) == 0;
+}
+
+// Remap /data/data/com.termux -> /data/data/com.sm64builder in file paths.
+// Returns the original path if no remapping needed, otherwise writes to buf.
+static const char* remap_path(const char* path, char* buf, size_t size) {
+    size_t old_len = strlen(OLD_TERMUX_PREFIX);
+    if (path && strncmp(path, OLD_TERMUX_PREFIX, old_len) == 0) {
+        snprintf(buf, size, "%s%s", APP_DATA_PREFIX, path + old_len);
+        return buf;
+    }
+    return path;
 }
 
 // Helper: check if file is an ELF binary by reading its magic bytes
@@ -178,6 +191,66 @@ static char** build_linker_argv_for_interp(const char* interp, const char* scrip
         new_argv[i + 2] = argv[i];
     }
     return new_argv;
+}
+
+// ============================================================
+// File operation interceptions: remap old Termux paths
+// at the libc level. This catches all hardcoded /data/data/
+// com.termux/ paths that binaries may have compiled in.
+// ============================================================
+
+// Intercept open() — remap old Termux paths in file paths
+int open(const char* path, int flags, ...) {
+    static int (*real_open)(const char*, int, ...) = NULL;
+    if (!real_open) real_open = dlsym(RTLD_NEXT, "open");
+    char buf[4096];
+    const char* p = remap_path(path, buf, sizeof(buf));
+    if (flags & O_CREAT) {
+        va_list ap; va_start(ap, flags);
+        mode_t mode = va_arg(ap, mode_t); va_end(ap);
+        return real_open(p, flags, mode);
+    }
+    return real_open(p, flags);
+}
+
+// Intercept openat() — remap paths for absolute paths
+int openat(int dirfd, const char* path, int flags, ...) {
+    static int (*real_openat)(int, const char*, int, ...) = NULL;
+    if (!real_openat) real_openat = dlsym(RTLD_NEXT, "openat");
+    const char* p = path;
+    char buf[4096];
+    if (path && path[0] == '/')
+        p = remap_path(path, buf, sizeof(buf));
+    if (flags & O_CREAT) {
+        va_list ap; va_start(ap, flags);
+        mode_t mode = va_arg(ap, mode_t); va_end(ap);
+        return real_openat(dirfd, p, flags, mode);
+    }
+    return real_openat(dirfd, p, flags);
+}
+
+// Intercept stat() — remap paths
+int stat(const char* path, struct stat* st) {
+    static int (*real_stat)(const char*, struct stat*) = NULL;
+    if (!real_stat) real_stat = dlsym(RTLD_NEXT, "stat");
+    char buf[4096];
+    return real_stat(remap_path(path, buf, sizeof(buf)), st);
+}
+
+// Intercept lstat() — same
+int lstat(const char* path, struct stat* st) {
+    static int (*real_lstat)(const char*, struct stat*) = NULL;
+    if (!real_lstat) real_lstat = dlsym(RTLD_NEXT, "lstat");
+    char buf[4096];
+    return real_lstat(remap_path(path, buf, sizeof(buf)), st);
+}
+
+// Intercept access() — remap paths
+int access(const char* path, int mode) {
+    static int (*real_access)(const char*, int) = NULL;
+    if (!real_access) real_access = dlsym(RTLD_NEXT, "access");
+    char buf[4096];
+    return real_access(remap_path(path, buf, sizeof(buf)), mode);
 }
 
 // Intercepted execve
