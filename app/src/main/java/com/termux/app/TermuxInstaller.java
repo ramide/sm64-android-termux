@@ -111,6 +111,7 @@ final class TermuxInstaller {
                 // Re-apply fixes in case they were from an older version
                 fixPrefixPaths();
                 setupAptConfig();
+                fixApkPermissions();
                 copyExecHookLibrary(activity);
                 whenDone.run();
                 return;
@@ -228,6 +229,9 @@ final class TermuxInstaller {
 
                     // Setup apt config to use this fork's package path
                     setupAptConfig();
+
+                    // Make APK files read-only (Android 16 blocks writable dex files)
+                    fixApkPermissions();
 
                     // Copy LD_PRELOAD hook library from APK native libs to $PREFIX/lib
                     copyExecHookLibrary(activity);
@@ -468,6 +472,20 @@ final class TermuxInstaller {
             Logger.logInfo(LOG_TAG, "Created apt config override at " + configFile.getAbsolutePath());
         } catch (Exception e) {
             Logger.logError(LOG_TAG, "Failed to create apt config override: " + e.getMessage());
+        }
+    }
+
+    /** Make APK files read-only (Android 16 blocks loading writable dex files). */
+    private static void fixApkPermissions() {
+        File libexecDir = new File(TERMUX_PREFIX_DIR_PATH + "/libexec");
+        if (!libexecDir.isDirectory()) return;
+        File[] apkFiles = libexecDir.listFiles((java.io.FileFilter) f ->
+            f.isFile() && f.getName().endsWith(".apk"));
+        if (apkFiles == null) return;
+        for (File apk : apkFiles) {
+            if (apk.setWritable(false, false) && apk.setReadable(true, false)) {
+                Logger.logInfo(LOG_TAG, "Made APK read-only: " + apk.getName());
+            }
         }
     }
 
