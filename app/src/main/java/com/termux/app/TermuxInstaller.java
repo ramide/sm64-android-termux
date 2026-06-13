@@ -29,6 +29,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStreamReader;
 import java.io.RandomAccessFile;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.zip.ZipEntry;
@@ -512,39 +513,25 @@ final class TermuxInstaller {
         File keyringDir = new File(TermuxConstants.TERMUX_PREFIX_DIR_PATH + "/share/termux-keyring");
         if (!keyringDir.isDirectory()) return;
 
-        File[] symlinks = gpgDir.listFiles(f -> f.isFile());
-        if (symlinks == null) return;
-
         String oldPrefix = "/data/data/com.termux";
         String newPrefix = "/data/data/" + TermuxConstants.TERMUX_PACKAGE_NAME;
 
-        for (File symlink : symlinks) {
+        for (File f : gpgDir.listFiles()) {
             try {
-                String target = symlink.getCanonicalPath();
-                // If the symlink isn't broken AND already points to the correct path, skip
-                if (target.startsWith(newPrefix)) continue;
-
-                // Resolve the actual file from the correct keyring directory
-                File realKey = new File(keyringDir, symlink.getName());
-                if (!realKey.exists()) {
-                    // Try reading the symlink target to find the key name
-                    String linkTarget = new String(java.nio.file.Files.readAllBytes(symlink.toPath()), "UTF-8");
-                    // Extract just the filename from the full path
-                    String keyName = linkTarget.substring(linkTarget.lastIndexOf('/') + 1).trim();
-                    realKey = new File(keyringDir, keyName);
-                }
-
-                if (realKey.exists()) {
-                    // Replace the broken symlink with a copy of the actual key file
-                    symlink.delete();
-                    Error error = FileUtils.copyFile("gpg key", realKey.getAbsolutePath(),
-                        symlink.getAbsolutePath(), false);
-                    if (error == null) {
-                        Logger.logInfo(LOG_TAG, "Fixed GPG key: " + symlink.getName());
-                    }
+                if (!java.nio.file.Files.isSymbolicLink(f.toPath())) continue;
+                String target = java.nio.file.Files.readSymbolicLink(f.toPath()).toString();
+                if (!target.startsWith(oldPrefix)) continue;
+                String keyName = target.substring(target.lastIndexOf('/') + 1);
+                File realKey = new File(keyringDir, keyName);
+                if (!realKey.exists()) continue;
+                f.delete();
+                Error error = FileUtils.copyFile("gpg key", realKey.getAbsolutePath(),
+                    f.getAbsolutePath(), false);
+                if (error == null) {
+                    Logger.logInfo(LOG_TAG, "Fixed GPG key: " + f.getName());
                 }
             } catch (Exception e) {
-                Logger.logError(LOG_TAG, "Failed to fix GPG key " + symlink.getName() + ": " + e.getMessage());
+                Logger.logError(LOG_TAG, "Failed to fix GPG key " + f.getName() + ": " + e.getMessage());
             }
         }
     }
