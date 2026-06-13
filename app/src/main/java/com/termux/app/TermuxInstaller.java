@@ -537,6 +537,7 @@ final class TermuxInstaller {
     }
 
     /** Make APK files read-only (Android 16 blocks loading writable dex files). */
+    private static void fixApkPermissions() {
         File libexecDir = new File(TERMUX_PREFIX_DIR_PATH + "/libexec");
         if (!libexecDir.isDirectory()) return;
         File[] apkFiles = libexecDir.listFiles((java.io.FileFilter) f ->
