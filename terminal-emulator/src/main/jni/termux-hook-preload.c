@@ -142,6 +142,7 @@ static char** build_linker_argv_for_apt(const char* pathname, char* const argv[]
         "-o", "Dir::Bin::Methods=" PREFIX_PATH "/lib/apt/methods",
         "-o", "Dir::Bin::AptKey=" PREFIX_PATH "/bin/apt-key",
         "-o", "Dir::Bin::dpkg=" PREFIX_PATH "/bin/dpkg",
+        "-o", "Acquire::https::CaInfo=" PREFIX_PATH "/etc/tls/cert.pem",
     };
     int opt_count = sizeof(opts) / sizeof(opts[0]);
 

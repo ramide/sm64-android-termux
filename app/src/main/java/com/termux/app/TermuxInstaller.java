@@ -483,7 +483,8 @@ final class TermuxInstaller {
             + "Dir::Temp \"" + prefix + "/tmp\";\n"
             + "Dir::Bin::Methods \"" + prefix + "/lib/apt/methods\";\n"
             + "Dir::Bin::AptKey \"" + prefix + "/bin/apt-key\";\n"
-            + "Dir::Bin::dpkg \"" + prefix + "/bin/dpkg\";\n";
+            + "Dir::Bin::dpkg \"" + prefix + "/bin/dpkg\";\n"
+            + "Acquire::https::CaInfo \"" + prefix + "/etc/tls/cert.pem\";\n";
         try (java.io.FileOutputStream fos = new java.io.FileOutputStream(configFile)) {
             fos.write(content.getBytes("UTF-8"));
             Logger.logInfo(LOG_TAG, "Created apt config override at " + configFile.getAbsolutePath());
