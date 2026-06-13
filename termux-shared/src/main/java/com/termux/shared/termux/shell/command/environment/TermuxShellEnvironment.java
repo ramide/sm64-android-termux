@@ -95,6 +95,10 @@ public class TermuxShellEnvironment extends AndroidShellEnvironment {
             // through /system/bin/linker64 to bypass Android 16's restriction
             // on executing binaries from app data directories.
             environment.put("LD_PRELOAD", TermuxConstants.TERMUX_LIB_PREFIX_DIR_PATH + "/libtermux-exec-hook.so");
+
+            // APT_CONFIG: tells apt to read config from the correct paths
+            // instead of its compiled-in /data/data/com.termux/ defaults.
+            environment.put("APT_CONFIG", TermuxConstants.TERMUX_PREFIX_DIR_PATH + "/etc/apt/apt.conf.d/00sm64builder.conf");
         }
 
         return environment;
