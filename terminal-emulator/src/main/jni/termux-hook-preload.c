@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
 #include <sys/time.h>
 #include <unistd.h>
 
@@ -67,6 +68,9 @@ static int is_old_termux_path(const char* path) {
 
 // Remap /data/data/com.termux -> /data/data/com.sm64builder in file paths.
 // Handles both /data/data/com.termux and ./data/data/com.termux (dpkg format).
+// Also handles doubled paths like /data/data/com.sm64builder/.../data/data/com.termux/
+// which can arise when apt combines Dir with a relative path that still contains
+// the old prefix (e.g. eipp.log.xz paths).
 // Returns the original path if no remapping needed, otherwise writes to buf.
 static const char* remap_path(const char* path, char* buf, size_t size) {
     if (!path) return path;
@@ -76,6 +80,48 @@ static const char* remap_path(const char* path, char* buf, size_t size) {
         p += 2;
         dot_slash = 1;
     }
+
+    // First check for doubled path: APP_PREFIX + /data/data/com.termux embedded
+    // e.g. /data/data/com.sm64builder/files/usr/data/data/com.termux/files/usr/...
+    // The OLD_TERMUX_PREFIX appears INSIDE the APP_DATA_PREFIX path.
+    size_t app_prefix_len = strlen(APP_DATA_PREFIX);
+    size_t old_prefix_len = strlen(OLD_TERMUX_PREFIX);
+    if (strncmp(p, APP_DATA_PREFIX, app_prefix_len) == 0) {
+        // Look for OLD_TERMUX_PREFIX after APP_DATA_PREFIX in the path
+        const char* old_pos = strstr(p + app_prefix_len, OLD_TERMUX_PREFIX);
+        if (old_pos) {
+            // Found OLD_TERMUX_PREFIX embedded — strip it out
+            // Build: prefix + everything_before_old + everything_after_old
+            size_t before_len = old_pos - p;
+            const char* after = old_pos + old_prefix_len;
+            if (dot_slash) {
+                snprintf(buf, size, "./%s", APP_DATA_PREFIX);
+                size_t prefix_end = strlen(buf);
+                // Copy from the portion between the app prefix and the old prefix
+                size_t mid_start = app_prefix_len;
+                size_t mid_len = before_len - mid_start;
+                memcpy(buf + prefix_end, p + mid_start, mid_len);
+                prefix_end += mid_len;
+                // Copy the rest after old prefix
+                strncpy(buf + prefix_end, after, size - prefix_end - 1);
+                buf[size - 1] = '\0';
+            } else {
+                snprintf(buf, size, "%s", APP_DATA_PREFIX);
+                size_t prefix_end = app_prefix_len;
+                // Copy the portion between the two prefixes
+                size_t mid_start = app_prefix_len;
+                size_t mid_len = before_len - mid_start;
+                if (prefix_end + mid_len + strlen(after) < size) {
+                    memcpy(buf + prefix_end, p + mid_start, mid_len);
+                    prefix_end += mid_len;
+                    strcpy(buf + prefix_end, after);
+                }
+            }
+            return buf;
+        }
+    }
+
+    // Standard old prefix remapping
     size_t old_len = strlen(OLD_TERMUX_PREFIX);
     if (strncmp(p, OLD_TERMUX_PREFIX, old_len) == 0) {
         if (dot_slash) {
@@ -413,83 +459,93 @@ static int read_self_argv0(char* buf, size_t size) {
     return 0;
 }
 
-// Intercept readlink() — dpkg reads symlinks for conffile handling.
-// Special case: /proc/self/exe interception for clang and other tools.
+// Resolve /proc/self/exe to the actual executable path.
 // When executables are launched via /system/bin/linker64 (our execve
 // workaround), /proc/self/exe points to the linker binary, not the
 // actual executable. This confuses tools like clang that use
 // /proc/self/exe to determine their installation directory.
 // We detect this by checking if the real /proc/self/exe is a linker,
 // and if so, return argv[0] from /proc/self/cmdline instead.
+// Returns the resolved path length, or 0 if no interception needed.
+static ssize_t resolve_proc_self_exe(const char* pathname, char* real_exe, size_t real_size) {
+    if (!pathname || strcmp(pathname, "/proc/self/exe") != 0) return 0;
+
+    // Use direct syscall to avoid recursion through our own readlinkat
+    ssize_t len = syscall(SYS_readlinkat, AT_FDCWD, pathname, real_exe, real_size - 1);
+    if (len <= 0) return 0;
+    real_exe[len] = '\0';
+
+    if (!is_linker_path(real_exe)) return 0; // Normal case, not a linker
+
+    // /proc/self/exe points to linker — try argv[0] instead
+    char argv0[4096];
+    if (read_self_argv0(argv0, sizeof(argv0)) != 0 || argv0[0] == '\0') return 0;
+
+    if (argv0[0] == '/') {
+        // Absolute path — use directly
+        size_t alen = strlen(argv0);
+        if (alen >= real_size) alen = real_size - 1;
+        memcpy(real_exe, argv0, alen);
+        real_exe[alen] = '\0';
+        return alen;
+    }
+
+    // Relative path: search PATH for the executable
+    char* path_env = getenv("PATH");
+    if (!path_env) return 0;
+
+    char* save = NULL;
+    char* tok = strtok_r(path_env, ":", &save);
+    while (tok) {
+        char candidate[4096];
+        snprintf(candidate, sizeof(candidate), "%s/%s", tok, argv0);
+        if (access(candidate, X_OK) == 0) {
+            size_t clen = strlen(candidate);
+            if (clen >= real_size) clen = real_size - 1;
+            memcpy(real_exe, candidate, clen);
+            real_exe[clen] = '\0';
+            return clen;
+        }
+        tok = strtok_r(NULL, ":", &save);
+    }
+    return 0;
+}
+
+// Intercept readlink() — dpkg reads symlinks for conffile handling.
+// Also handles /proc/self/exe via resolve_proc_self_exe().
 ssize_t readlink(const char* pathname, char* buf, size_t size) {
+    // Check for /proc/self/exe interception
+    char resolved[4096];
+    ssize_t rlen = resolve_proc_self_exe(pathname, resolved, sizeof(resolved));
+    if (rlen > 0) {
+        if ((size_t)rlen >= size) rlen = size - 1;
+        memcpy(buf, resolved, rlen);
+        buf[rlen] = '\0';
+        return rlen;
+    }
+
     static ssize_t (*real_readlink)(const char*, char*, size_t) = NULL;
     if (!real_readlink) {
         real_readlink = dlsym(RTLD_NEXT, "readlink");
         if (!real_readlink) _exit(127);
     }
-
-    // For /proc/self/exe: check if the real result is a linker path.
-    // If so, the exec workaround is in effect and we should return argv[0]
-    // so tools like clang can find their real installation directory.
-    if (pathname && strcmp(pathname, "/proc/self/exe") == 0) {
-        // Buffer must be large enough for a typical path
-        char real_exe[4096];
-        if (size > 4096) size = 4096;
-        ssize_t len = real_readlink(pathname, real_exe, sizeof(real_exe) - 1);
-        if (len > 0) {
-            real_exe[len] = '\0';
-            if (is_linker_path(real_exe)) {
-                // /proc/self/exe points to linker — try argv[0] instead
-                char argv0[4096];
-                if (read_self_argv0(argv0, sizeof(argv0)) == 0 && argv0[0] != '\0') {
-                    // If argv[0] is an absolute path, use it
-                    if (argv0[0] == '/') {
-                        size_t alen = strlen(argv0);
-                        if (alen >= size) alen = size - 1;
-                        memcpy(buf, argv0, alen);
-                        buf[alen] = '\0';
-                        return alen;
-                    }
-                    // Relative path: search PATH for a real absolute path
-                    char* path_env = getenv("PATH");
-                    if (path_env) {
-                        // Resolve argv[0] against PATH using access()
-                        char* save = NULL;
-                        char* tok = strtok_r(path_env, ":", &save);
-                        while (tok) {
-                            char candidate[4096];
-                            snprintf(candidate, sizeof(candidate), "%s/%s", tok, argv0);
-                            if (access(candidate, X_OK) == 0) {
-                                size_t clen = strlen(candidate);
-                                if (clen >= size) clen = size - 1;
-                                memcpy(buf, candidate, clen);
-                                buf[clen] = '\0';
-                                return clen;
-                            }
-                            tok = strtok_r(NULL, ":", &save);
-                        }
-                    }
-                }
-                // Fall through: return the linker path (better than nothing)
-                len = (len >= (ssize_t)size) ? (ssize_t)(size - 1) : len;
-                memcpy(buf, real_exe, len);
-                buf[len] = '\0';
-                return len;
-            }
-        }
-        // Normal case: just return the real result
-        len = (len >= (ssize_t)size) ? (ssize_t)(size - 1) : len;
-        memcpy(buf, real_exe, len);
-        buf[len] = '\0';
-        return len;
-    }
-
     char pbuf[4096];
     return real_readlink(remap_path(pathname, pbuf, sizeof(pbuf)), buf, size);
 }
 
 // Intercept readlinkat() — alternative to readlink()
+// Also handles /proc/self/exe via resolve_proc_self_exe().
 ssize_t readlinkat(int dirfd, const char* pathname, char* buf, size_t size) {
+    // Check for /proc/self/exe interception
+    char resolved[4096];
+    ssize_t rlen = resolve_proc_self_exe(pathname, resolved, sizeof(resolved));
+    if (rlen > 0) {
+        if ((size_t)rlen >= size) rlen = size - 1;
+        memcpy(buf, resolved, rlen);
+        buf[rlen] = '\0';
+        return rlen;
+    }
+
     static ssize_t (*real_readlinkat)(int, const char*, char*, size_t) = NULL;
     if (!real_readlinkat) {
         real_readlinkat = dlsym(RTLD_NEXT, "readlinkat");

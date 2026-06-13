@@ -481,6 +481,7 @@ final class TermuxInstaller {
                 + "Dir::Etc \"" + prefix + "/etc/apt\";\n"
                 + "Dir::Etc::TrustedParts \"trusted.gpg.d\";\n"
                 + "Dir::Temp \"" + prefix + "/tmp\";\n"
+                + "Dir::Log \"" + prefix + "/var/log/apt\";\n"
                 + "Dir::Bin::Methods \"" + prefix + "/lib/apt/methods\";\n"
                 + "Dir::Bin::apt-key \"" + prefix + "/bin/apt-key\";\n"
                 + "Dir::Bin::dpkg \"" + prefix + "/bin/dpkg\";\n"
