@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <unistd.h>
 
 // The app data directory prefix we check against
@@ -291,6 +292,33 @@ DIR *opendir(const char *name) {
     }
     char buf[4096];
     return real_opendir(remap_path(name, buf, sizeof(buf)));
+}
+
+// Intercept rename() — dpkg uses this to move .dpkg-new files to final names
+int rename(const char* oldpath, const char* newpath) {
+    static int (*real_rename)(const char*, const char*) = NULL;
+    if (!real_rename) {
+        real_rename = dlsym(RTLD_NEXT, "rename");
+        if (!real_rename) _exit(127);
+    }
+    char oldbuf[4096], newbuf[4096];
+    return real_rename(remap_path(oldpath, oldbuf, sizeof(oldbuf)),
+                       remap_path(newpath, newbuf, sizeof(newbuf)));
+}
+
+// Intercept utimensat() — dpkg uses this to set file timestamps
+int utimensat(int dirfd, const char* pathname, const struct timespec times[2], int flags) {
+    static int (*real_utimensat)(int, const char*, const struct timespec*, int) = NULL;
+    if (!real_utimensat) {
+        real_utimensat = dlsym(RTLD_NEXT, "utimensat");
+        if (!real_utimensat) _exit(127);
+    }
+    char buf[4096];
+    // Only remap if absolute path (dirfd is AT_FDCWD or absolute)
+    const char* p = pathname;
+    if (pathname && pathname[0] == '/')
+        p = remap_path(pathname, buf, sizeof(buf));
+    return real_utimensat(dirfd, p, times, flags);
 }
 
 // Intercepted execve
