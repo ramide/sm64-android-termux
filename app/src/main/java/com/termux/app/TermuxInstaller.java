@@ -411,9 +411,18 @@ final class TermuxInstaller {
         }
     }
 
-    /** Replace all occurrences of oldPrefix in a text file. */
+    /** Replace all occurrences of oldPrefix in a text file. Skips ELF binaries. */
     private static void fixPrefixPathsInFile(File file, String oldPrefix, String newPrefix) {
         try {
+            // Skip ELF binaries — replacing strings in them would corrupt the binary
+            byte[] magic = new byte[4];
+            try (java.io.FileInputStream fis = new java.io.FileInputStream(file)) {
+                int n = fis.read(magic);
+                if (n >= 4 && magic[0] == 0x7f && magic[1] == 'E' &&
+                    magic[2] == 'L' && magic[3] == 'F') return;
+                if (file.getName().endsWith(".so")) return;
+            }
+
             byte[] contentBytes = new byte[(int) Math.min(file.length(), 40960)];
             int bytesRead;
             try (java.io.FileInputStream fis = new java.io.FileInputStream(file)) {
