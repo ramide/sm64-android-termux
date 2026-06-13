@@ -26,8 +26,9 @@
 // The system linker executable
 #define SYSTEM_LINKER "/system/bin/linker64"
 
-// Type signature for execve
+// Type signatures for exec variants
 typedef int (*execve_func_t)(const char*, char* const[], char* const[]);
+typedef int (*execvp_func_t)(const char*, char* const[]);
 
 // Forward declaration for environ
 extern char **environ;
@@ -77,9 +78,9 @@ int execve(const char* pathname, char* const argv[], char* const envp[]) {
 
 // Intercepted execvp — handles PATH-relative lookups
 int execvp(const char* file, char* const argv[]) {
-    static execve_func_t real_execvp = NULL;
+    static execvp_func_t real_execvp = NULL;
     if (!real_execvp) {
-        real_execvp = (execve_func_t)dlsym(RTLD_NEXT, "execvp");
+        real_execvp = (execvp_func_t)dlsym(RTLD_NEXT, "execvp");
         if (!real_execvp) _exit(127);
     }
 
