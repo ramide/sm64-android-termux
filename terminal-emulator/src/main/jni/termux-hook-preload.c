@@ -123,7 +123,6 @@ static const char* remap_path(const char* path, char* buf, size_t size) {
 
     // Standard old prefix remapping
     size_t old_len = strlen(OLD_TERMUX_PREFIX);
-    size_t old_rel_len = strlen(OLD_TERMUX_PREFIX_REL);
     if (strncmp(p, OLD_TERMUX_PREFIX, old_len) == 0) {
         if (dot_slash) {
             snprintf(buf, size, "./%s%s", APP_DATA_PREFIX, p + old_len);
