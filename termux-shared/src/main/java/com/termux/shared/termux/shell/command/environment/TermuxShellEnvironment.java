@@ -99,6 +99,12 @@ public class TermuxShellEnvironment extends AndroidShellEnvironment {
             // APT_CONFIG: tells apt to read config from the correct paths
             // instead of its compiled-in /data/data/com.termux/ defaults.
             environment.put("APT_CONFIG", TermuxConstants.TERMUX_PREFIX_DIR_PATH + "/etc/apt/apt.conf.d/00sm64builder.conf");
+
+            // SSL_CERT_FILE: point to Termux's CA certificate bundle at the
+            // correct package path. Without this, HTTPS connections fail with
+            // "certificate verification failed" because libcurl looks for the
+            // bundle at the compiled-in /data/data/com.termux/ path.
+            environment.put("SSL_CERT_FILE", TermuxConstants.TERMUX_PREFIX_DIR_PATH + "/etc/tls/cert.pem");
         }
 
         return environment;

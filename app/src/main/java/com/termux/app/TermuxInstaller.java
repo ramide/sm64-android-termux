@@ -237,7 +237,11 @@ final class TermuxInstaller {
                     setupDpkgConfig();
 
                     // Fix GPG key symlinks pointing to old com.termux paths
-                    fixGpgKeys();
+                fixGpgKeys();
+                fixCertificates();
+
+                    // Create CA certificate symlink for HTTPS support
+                    fixCertificates();
 
                     // Make APK files read-only (Android 16 blocks writable dex files)
                     fixApkPermissions();
@@ -535,6 +539,23 @@ final class TermuxInstaller {
                 }
             } catch (Exception e) {
                 Logger.logError(LOG_TAG, "Failed to fix GPG key " + f.getName() + ": " + e.getMessage());
+            }
+        }
+    }
+
+    /** Create CA certificate symlink for HTTPS support. */
+    private static void fixCertificates() {
+        File sslCerts = new File(TermuxConstants.TERMUX_PREFIX_DIR_PATH + "/etc/ssl/certs");
+        sslCerts.mkdirs();
+        File certBundle = new File(TermuxConstants.TERMUX_PREFIX_DIR_PATH + "/etc/tls/cert.pem");
+        if (!certBundle.exists()) return;
+        File caSymlink = new File(sslCerts, "ca-certificates.crt");
+        if (!caSymlink.exists()) {
+            try {
+                java.nio.file.Files.createSymbolicLink(caSymlink.toPath(), certBundle.toPath());
+                Logger.logInfo(LOG_TAG, "Created CA cert symlink");
+            } catch (Exception e) {
+                Logger.logError(LOG_TAG, "Failed to create CA symlink: " + e.getMessage());
             }
         }
     }
