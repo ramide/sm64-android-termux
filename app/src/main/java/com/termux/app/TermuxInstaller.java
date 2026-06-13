@@ -109,7 +109,7 @@ final class TermuxInstaller {
                 Logger.logInfo(LOG_TAG, "The termux prefix directory \"" + TERMUX_PREFIX_DIR_PATH + "\" exists but is empty or only contains specific unimportant files.");
             } else {
                 // Re-apply fixes in case they were from an older version
-                fixShebangs();
+                fixPrefixPaths();
                 copyExecHookLibrary(activity);
                 whenDone.run();
                 return;
@@ -222,8 +222,8 @@ final class TermuxInstaller {
 
                     Logger.logInfo(LOG_TAG, "Bootstrap packages installed successfully.");
 
-                    // Fix shebangs in SM64 Builder scripts to use this fork's package path
-                    fixShebangs();
+                    // Fix hardcoded /data/data/com.termux paths to use this fork's package path
+                    fixPrefixPaths();
 
                     // Copy LD_PRELOAD hook library from APK native libs to $PREFIX/lib
                     copyExecHookLibrary(activity);
@@ -385,30 +385,52 @@ final class TermuxInstaller {
         return FileUtils.createDirectoryFile(directory.getAbsolutePath());
     }
 
-    /** Fix shebangs in SM64 Builder scripts to replace com.termux with com.sm64builder. */
-    private static void fixShebangs() {
+    /** Replace all /data/data/com.termux paths with the correct package path. */
+    private static void fixPrefixPaths() {
         String oldPrefix = "/data/data/com.termux";
         String newPrefix = "/data/data/" + TermuxConstants.TERMUX_PACKAGE_NAME;
-        String[] scripts = {
-            "build-sm64ex-alo.sh", "build-sm64ex-coop.sh", "build-sm64ex-coop-render96.sh",
-            "build-sm64ex-EXT.sh", "build-sm64ex-EXTnoTouch.sh", "build-sm64ex-INT.sh",
-            "build-sm64ex-INTnoTouch.sh", "build-sm64ex-omm.sh", "build-sm64ex-porcino.sh",
-            "build-starroad.sh", "login", "multitroid.sh", "patcher.sh", "reset.sh", "sm64_menu.sh"
-        };
-        for (String script : scripts) {
-            File file = new File(TERMUX_PREFIX_DIR_PATH + "/bin", script);
-            if (!file.exists() || !file.isFile()) continue;
-            try (RandomAccessFile raf = new RandomAccessFile(file, "rw")) {
-                String shebang = raf.readLine();
-                if (shebang != null && shebang.startsWith("#!" + oldPrefix)) {
-                    String newShebang = shebang.replace(oldPrefix, newPrefix);
-                    raf.seek(0);
-                    raf.writeBytes(newShebang + "\n");
-                    Logger.logInfo(LOG_TAG, "Fixed shebang in " + script);
-                }
-            } catch (Exception e) {
-                Logger.logError(LOG_TAG, "Failed to fix shebang in " + script + ": " + e.getMessage());
+        if (oldPrefix.equals(newPrefix)) return;
+
+        fixPrefixPathsInDir(new File(TERMUX_PREFIX_DIR_PATH + "/bin"), oldPrefix, newPrefix);
+        fixPrefixPathsInDir(new File(TERMUX_PREFIX_DIR_PATH + "/libexec"), oldPrefix, newPrefix);
+        fixPrefixPathsInDir(new File(TERMUX_PREFIX_DIR_PATH + "/etc"), oldPrefix, newPrefix);
+        fixPrefixPathsInDir(new File(TermuxConstants.TERMUX_HOME_DIR_PATH), oldPrefix, newPrefix);
+    }
+
+    /** Scan directory recursively and replace oldPrefix with newPrefix in text files. */
+    private static void fixPrefixPathsInDir(File dir, String oldPrefix, String newPrefix) {
+        if (dir == null || !dir.isDirectory()) return;
+        File[] files = dir.listFiles();
+        if (files == null) return;
+        for (File file : files) {
+            if (file.isDirectory()) {
+                fixPrefixPathsInDir(file, oldPrefix, newPrefix);
+            } else if (file.isFile() && file.canRead()) {
+                fixPrefixPathsInFile(file, oldPrefix, newPrefix);
             }
+        }
+    }
+
+    /** Replace all occurrences of oldPrefix in a text file. */
+    private static void fixPrefixPathsInFile(File file, String oldPrefix, String newPrefix) {
+        try {
+            byte[] contentBytes = new byte[(int) Math.min(file.length(), 40960)];
+            int bytesRead;
+            try (java.io.FileInputStream fis = new java.io.FileInputStream(file)) {
+                bytesRead = fis.read(contentBytes);
+            }
+            if (bytesRead <= 0) return;
+
+            String content = new String(contentBytes, 0, bytesRead, "UTF-8");
+            if (!content.contains(oldPrefix)) return;
+            String newContent = content.replace(oldPrefix, newPrefix);
+            byte[] newBytes = newContent.getBytes("UTF-8");
+            try (java.io.FileOutputStream fos = new java.io.FileOutputStream(file)) {
+                fos.write(newBytes);
+            }
+            Logger.logInfo(LOG_TAG, "Fixed paths in " + file.getAbsolutePath());
+        } catch (Exception e) {
+            Logger.logError(LOG_TAG, "Failed to fix paths in " + file.getAbsolutePath() + ": " + e.getMessage());
         }
     }
 

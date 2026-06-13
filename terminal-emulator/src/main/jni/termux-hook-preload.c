@@ -24,6 +24,9 @@
 // The app data directory prefix we check against
 #define APP_DATA_PREFIX "/data/data/com.sm64builder"
 
+// Old Termux path prefix that may appear in bootstrap scripts/configs
+#define OLD_TERMUX_PREFIX "/data/data/com.termux"
+
 // The system linker executable
 #define SYSTEM_LINKER "/system/bin/linker64"
 
@@ -53,6 +56,7 @@ static int is_elf_binary(const char* path) {
 
 // Helper: parse shebang from a script file and extract interpreter path.
 // Returns 0 on success, -1 if not a shebang script.
+// Automatically remaps /data/data/com.termux paths to the correct package path.
 static int parse_shebang(const char* path, char* interp, size_t interp_size) {
     int fd = open(path, O_RDONLY);
     if (fd < 0) return -1;
@@ -73,7 +77,22 @@ static int parse_shebang(const char* path, char* interp, size_t interp_size) {
         pos++;
     }
     interp[i] = '\0';
-    return (i > 0) ? 0 : -1;
+    if (i <= 0) return -1;
+
+    // Remap old Termux prefix to current package path
+    size_t old_len = strlen(OLD_TERMUX_PREFIX);
+    size_t new_len = strlen(APP_DATA_PREFIX);
+    if (strncmp(interp, OLD_TERMUX_PREFIX, old_len) == 0) {
+        // Shift the path tail and insert new prefix
+        char *tail = interp + old_len;
+        size_t tail_len = strlen(tail) + 1;
+        if (old_len != new_len) {
+            // Need to shift: move tail to make room for new prefix length
+            memmove(interp + new_len, tail, tail_len);
+        }
+        memcpy(interp, APP_DATA_PREFIX, new_len);
+    }
+    return 0;
 }
 
 // Build new argv for executing an ELF binary through linker64:
