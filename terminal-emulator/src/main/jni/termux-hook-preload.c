@@ -395,13 +395,95 @@ int unlink(const char* pathname) {
     return real_unlink(remap_path(pathname, buf, sizeof(buf)));
 }
 
-// Intercept readlink() — dpkg reads symlinks for conffile handling
+// Check if the real readlink result for /proc/self/exe is a linker binary.
+// Returns 1 if the path contains "linker64" (indicating we were launched
+// via the linker workaround and /proc/self/exe is wrong).
+static int is_linker_path(const char* path) {
+    return path && (strstr(path, "linker64") != NULL);
+}
+
+// Read argv[0] from /proc/self/cmdline. Returns 0 on success.
+static int read_self_argv0(char* buf, size_t size) {
+    int fd = open("/proc/self/cmdline", O_RDONLY);
+    if (fd < 0) return -1;
+    ssize_t n = read(fd, buf, size - 1);
+    close(fd);
+    if (n <= 0) return -1;
+    buf[n] = '\0';
+    return 0;
+}
+
+// Intercept readlink() — dpkg reads symlinks for conffile handling.
+// Special case: /proc/self/exe interception for clang and other tools.
+// When executables are launched via /system/bin/linker64 (our execve
+// workaround), /proc/self/exe points to the linker binary, not the
+// actual executable. This confuses tools like clang that use
+// /proc/self/exe to determine their installation directory.
+// We detect this by checking if the real /proc/self/exe is a linker,
+// and if so, return argv[0] from /proc/self/cmdline instead.
 ssize_t readlink(const char* pathname, char* buf, size_t size) {
     static ssize_t (*real_readlink)(const char*, char*, size_t) = NULL;
     if (!real_readlink) {
         real_readlink = dlsym(RTLD_NEXT, "readlink");
         if (!real_readlink) _exit(127);
     }
+
+    // For /proc/self/exe: check if the real result is a linker path.
+    // If so, the exec workaround is in effect and we should return argv[0]
+    // so tools like clang can find their real installation directory.
+    if (pathname && strcmp(pathname, "/proc/self/exe") == 0) {
+        // Buffer must be large enough for a typical path
+        char real_exe[4096];
+        if (size > 4096) size = 4096;
+        ssize_t len = real_readlink(pathname, real_exe, sizeof(real_exe) - 1);
+        if (len > 0) {
+            real_exe[len] = '\0';
+            if (is_linker_path(real_exe)) {
+                // /proc/self/exe points to linker — try argv[0] instead
+                char argv0[4096];
+                if (read_self_argv0(argv0, sizeof(argv0)) == 0 && argv0[0] != '\0') {
+                    // If argv[0] is an absolute path, use it
+                    if (argv0[0] == '/') {
+                        size_t alen = strlen(argv0);
+                        if (alen >= size) alen = size - 1;
+                        memcpy(buf, argv0, alen);
+                        buf[alen] = '\0';
+                        return alen;
+                    }
+                    // Relative path: search PATH for a real absolute path
+                    char* path_env = getenv("PATH");
+                    if (path_env) {
+                        // Resolve argv[0] against PATH using access()
+                        char* save = NULL;
+                        char* tok = strtok_r(path_env, ":", &save);
+                        while (tok) {
+                            char candidate[4096];
+                            snprintf(candidate, sizeof(candidate), "%s/%s", tok, argv0);
+                            if (access(candidate, X_OK) == 0) {
+                                size_t clen = strlen(candidate);
+                                if (clen >= size) clen = size - 1;
+                                memcpy(buf, candidate, clen);
+                                buf[clen] = '\0';
+                                return clen;
+                            }
+                            tok = strtok_r(NULL, ":", &save);
+                        }
+                    }
+                }
+                // Fall through: return the linker path (better than nothing)
+                len = (len >= (ssize_t)size) ? (ssize_t)(size - 1) : len;
+                memcpy(buf, real_exe, len);
+                buf[len] = '\0';
+                return len;
+            }
+        }
+        // Normal case: just return the real result
+        len = (len >= (ssize_t)size) ? (ssize_t)(size - 1) : len;
+        memcpy(buf, real_exe, len);
+        buf[len] = '\0';
+        return len;
+    }
+
     char pbuf[4096];
     return real_readlink(remap_path(pathname, pbuf, sizeof(pbuf)), buf, size);
 }
