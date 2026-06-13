@@ -105,6 +105,12 @@ public class TermuxShellEnvironment extends AndroidShellEnvironment {
             // "certificate verification failed" because libcurl looks for the
             // bundle at the compiled-in /data/data/com.termux/ path.
             environment.put("SSL_CERT_FILE", TermuxConstants.TERMUX_PREFIX_DIR_PATH + "/etc/tls/cert.pem");
+
+            // CLANG_RESOURCE_DIR: tells clang where to find its built-in headers.
+            // When executed via /system/bin/linker64, clang can't determine its
+            // own path from /proc/self/exe (which points to linker64). This env
+            // var overrides the resource directory search.
+            environment.put("CLANG_RESOURCE_DIR", TermuxConstants.TERMUX_LIB_PREFIX_DIR_PATH + "/clang/21");
         }
 
         return environment;
