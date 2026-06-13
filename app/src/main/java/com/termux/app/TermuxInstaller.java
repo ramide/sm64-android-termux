@@ -488,6 +488,7 @@ final class TermuxInstaller {
                 + "Acquire::https::CaInfo \"" + prefix + "/etc/tls/cert.pem\";\n"
                 + "Acquire::AllowInsecureRepositories \"true\";\n"
                 + "Acquire::AllowDowngradeToInsecureRepositories \"true\";\n"
+                + "APT::Get::AllowUnauthenticated \"true\";\n"
                 + "DPkg::Options:: \"--admindir=" + prefix + "/var/lib/dpkg\";\n"
                 + "DPkg::Path \"" + prefix + "/bin:/system/bin\";\n";
             try (java.io.FileOutputStream fos = new java.io.FileOutputStream(configFile)) {
