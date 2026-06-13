@@ -90,6 +90,11 @@ public class TermuxShellEnvironment extends AndroidShellEnvironment {
             // Bootstrap binaries have DT_RUNPATH hardcoded to /data/data/com.termux/files/usr/lib
             // which doesn't match this fork's package name. Always set LD_LIBRARY_PATH explicitly.
             environment.put(ENV_LD_LIBRARY_PATH, TermuxConstants.TERMUX_LIB_PREFIX_DIR_PATH);
+
+            // LD_PRELOAD hook: intercepts all execve() calls and redirects
+            // through /system/bin/linker64 to bypass Android 16's restriction
+            // on executing binaries from app data directories.
+            environment.put("LD_PRELOAD", TermuxConstants.TERMUX_LIB_PREFIX_DIR_PATH + "/libtermux-exec-hook.so");
         }
 
         return environment;
