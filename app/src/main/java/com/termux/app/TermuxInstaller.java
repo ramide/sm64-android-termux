@@ -482,7 +482,7 @@ final class TermuxInstaller {
             + "Dir::Etc \"" + prefix + "/etc/apt\";\n"
             + "Dir::Temp \"" + prefix + "/tmp\";\n"
             + "Dir::Bin::Methods \"" + prefix + "/lib/apt/methods\";\n"
-            + "Dir::Bin::AptKey \"" + prefix + "/bin/apt-key\";\n"
+            + "Dir::Bin::apt-key \"" + prefix + "/bin/apt-key\";\n"
             + "Dir::Bin::dpkg \"" + prefix + "/bin/dpkg\";\n"
             + "Acquire::https::CaInfo \"" + prefix + "/etc/tls/cert.pem\";\n";
         try (java.io.FileOutputStream fos = new java.io.FileOutputStream(configFile)) {
