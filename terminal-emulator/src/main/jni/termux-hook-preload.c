@@ -345,6 +345,17 @@ int mkdir(const char* pathname, mode_t mode) {
     return real_mkdir(remap_path(pathname, buf, sizeof(buf)), mode);
 }
 
+// Intercept chmod() — dpkg uses this to set file permissions on .dpkg-new files
+int chmod(const char* pathname, mode_t mode) {
+    static int (*real_chmod)(const char*, mode_t) = NULL;
+    if (!real_chmod) {
+        real_chmod = dlsym(RTLD_NEXT, "chmod");
+        if (!real_chmod) _exit(127);
+    }
+    char buf[4096];
+    return real_chmod(remap_path(pathname, buf, sizeof(buf)), mode);
+}
+
 // Intercepted execve
 int execve(const char* pathname, char* const argv[], char* const envp[]) {
     // Remap old Termux paths to current package path
