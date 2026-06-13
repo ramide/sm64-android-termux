@@ -18,6 +18,7 @@
 #include <dlfcn.h>
 #include <fcntl.h>
 #include <stdarg.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -41,6 +42,10 @@ typedef int (*execvp_func_t)(const char*, char* const[]);
 
 // Forward declaration for environ
 extern char **environ;
+
+// The real execve function, resolved via dlsym(RTLD_NEXT)
+// Shared between execve() and execvp() interceptors.
+static execve_func_t real_execve = NULL;
 
 // Helper: check if path is in the app data directory
 static int is_app_data_path(const char* path) {
@@ -102,6 +107,8 @@ static int parse_shebang(const char* path, char* interp, size_t interp_size) {
         // Shift the path tail and insert new prefix
         char *tail = interp + old_len;
         size_t tail_len = strlen(tail) + 1;
+        // Guard against buffer overflow: new prefix + tail must fit
+        if (new_len + tail_len > interp_size) return -1;
         if (old_len != new_len) {
             // Need to shift: move tail to make room for new prefix length
             memmove(interp + new_len, tail, tail_len);
@@ -202,12 +209,15 @@ static char** build_linker_argv_for_interp(const char* interp, const char* scrip
 // Intercept open() — remap old Termux paths in file paths
 int open(const char* path, int flags, ...) {
     static int (*real_open)(const char*, int, ...) = NULL;
-    if (!real_open) real_open = dlsym(RTLD_NEXT, "open");
+    if (!real_open) {
+        real_open = dlsym(RTLD_NEXT, "open");
+        if (!real_open) _exit(127);
+    }
     char buf[4096];
     const char* p = remap_path(path, buf, sizeof(buf));
     if (flags & O_CREAT) {
         va_list ap; va_start(ap, flags);
-        mode_t mode = va_arg(ap, mode_t); va_end(ap);
+        int mode = va_arg(ap, int); va_end(ap);
         return real_open(p, flags, mode);
     }
     return real_open(p, flags);
@@ -216,14 +226,17 @@ int open(const char* path, int flags, ...) {
 // Intercept openat() — remap paths for absolute paths
 int openat(int dirfd, const char* path, int flags, ...) {
     static int (*real_openat)(int, const char*, int, ...) = NULL;
-    if (!real_openat) real_openat = dlsym(RTLD_NEXT, "openat");
+    if (!real_openat) {
+        real_openat = dlsym(RTLD_NEXT, "openat");
+        if (!real_openat) _exit(127);
+    }
     const char* p = path;
     char buf[4096];
     if (path && path[0] == '/')
         p = remap_path(path, buf, sizeof(buf));
     if (flags & O_CREAT) {
         va_list ap; va_start(ap, flags);
-        mode_t mode = va_arg(ap, mode_t); va_end(ap);
+        int mode = va_arg(ap, int); va_end(ap);
         return real_openat(dirfd, p, flags, mode);
     }
     return real_openat(dirfd, p, flags);
@@ -232,7 +245,10 @@ int openat(int dirfd, const char* path, int flags, ...) {
 // Intercept stat() — remap paths
 int stat(const char* path, struct stat* st) {
     static int (*real_stat)(const char*, struct stat*) = NULL;
-    if (!real_stat) real_stat = dlsym(RTLD_NEXT, "stat");
+    if (!real_stat) {
+        real_stat = dlsym(RTLD_NEXT, "stat");
+        if (!real_stat) _exit(127);
+    }
     char buf[4096];
     return real_stat(remap_path(path, buf, sizeof(buf)), st);
 }
@@ -240,7 +256,10 @@ int stat(const char* path, struct stat* st) {
 // Intercept lstat() — same
 int lstat(const char* path, struct stat* st) {
     static int (*real_lstat)(const char*, struct stat*) = NULL;
-    if (!real_lstat) real_lstat = dlsym(RTLD_NEXT, "lstat");
+    if (!real_lstat) {
+        real_lstat = dlsym(RTLD_NEXT, "lstat");
+        if (!real_lstat) _exit(127);
+    }
     char buf[4096];
     return real_lstat(remap_path(path, buf, sizeof(buf)), st);
 }
@@ -248,14 +267,16 @@ int lstat(const char* path, struct stat* st) {
 // Intercept access() — remap paths
 int access(const char* path, int mode) {
     static int (*real_access)(const char*, int) = NULL;
-    if (!real_access) real_access = dlsym(RTLD_NEXT, "access");
+    if (!real_access) {
+        real_access = dlsym(RTLD_NEXT, "access");
+        if (!real_access) _exit(127);
+    }
     char buf[4096];
     return real_access(remap_path(path, buf, sizeof(buf)), mode);
 }
 
 // Intercepted execve
 int execve(const char* pathname, char* const argv[], char* const envp[]) {
-    static execve_func_t real_execve = NULL;
     if (!real_execve) {
         real_execve = (execve_func_t)dlsym(RTLD_NEXT, "execve");
         if (!real_execve) _exit(127);
@@ -300,13 +321,20 @@ int execvp(const char* file, char* const argv[]) {
         real_execvp = (execvp_func_t)dlsym(RTLD_NEXT, "execvp");
         if (!real_execvp) _exit(127);
     }
+    // Ensure real_execve is resolved
+    if (!real_execve) {
+        real_execve = (execve_func_t)dlsym(RTLD_NEXT, "execve");
+        if (!real_execve) _exit(127);
+    }
 
     // If the path contains a slash, it's an absolute/relative path
     if (file && strchr(file, '/')) {
         if (is_app_data_path(file)) {
+            // Build linker64 argv for the target (same as execve does for ELF)
             char** new_argv = build_linker_argv(file, argv);
             if (new_argv) {
-                int ret = execve(file, new_argv, environ);
+                // Call real_execve directly — NOT our intercepted execve
+                int ret = real_execve(SYSTEM_LINKER, new_argv, environ);
                 free(new_argv);
                 return ret;
             }
