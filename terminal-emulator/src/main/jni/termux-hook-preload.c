@@ -453,7 +453,12 @@ static int is_linker_path(const char* path) {
     return path && (strstr(path, "linker64") != NULL);
 }
 
-// Read argv[0] from /proc/self/cmdline. Returns 0 on success.
+// Read argv[0] of the ACTUAL executable from /proc/self/cmdline.
+// The kernel stores the full argv from the execve() call. Since our
+// execve hook redirects through linker64, cmdline looks like:
+//   linker64\0binary_path\0exec_argv0\0exec_argv1\0...
+// We skip the first 2 entries (linker path and binary path) to get
+// the target executable's argv[0]. Returns 0 on success.
 static int read_self_argv0(char* buf, size_t size) {
     int fd = open("/proc/self/cmdline", O_RDONLY);
     if (fd < 0) return -1;
@@ -461,7 +466,24 @@ static int read_self_argv0(char* buf, size_t size) {
     close(fd);
     if (n <= 0) return -1;
     buf[n] = '\0';
-    return 0;
+
+    // The cmdline is argv from execve(): null-separated entries.
+    // We need the 3rd entry (index 2), which is the actual program's argv[0].
+    // Skip 2 entries (linker path, binary path), then take the next one.
+    int entry = 0;
+    size_t pos = 0;
+    while (pos < (size_t)n && entry < 2) {
+        if (buf[pos] == '\0') entry++;
+        pos++;
+    }
+    if (pos < (size_t)n) {
+        // Shift the remaining string (the target's argv[0]) to the start of buf
+        size_t remaining = n - pos;
+        memmove(buf, buf + pos, remaining);
+        buf[remaining] = '\0';
+        return 0;
+    }
+    return -1;
 }
 
 // Resolve /proc/self/exe to the actual executable path.
