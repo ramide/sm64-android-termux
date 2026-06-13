@@ -16,6 +16,7 @@
 // ============================================================
 #define _GNU_SOURCE
 #include <dlfcn.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -39,8 +40,44 @@ static int is_app_data_path(const char* path) {
     return path && strncmp(path, APP_DATA_PREFIX, prefix_len) == 0;
 }
 
-// Build new argv with linker64 as the executable and the original
-// path as argv[1]. The caller must free the returned pointer.
+// Helper: check if file is an ELF binary by reading its magic bytes
+static int is_elf_binary(const char* path) {
+    int fd = open(path, O_RDONLY);
+    if (fd < 0) return 0;
+    char magic[4];
+    int n = read(fd, magic, 4);
+    close(fd);
+    return (n == 4) && magic[0] == 0x7f && magic[1] == 'E' &&
+           magic[2] == 'L' && magic[3] == 'F';
+}
+
+// Helper: parse shebang from a script file and extract interpreter path.
+// Returns 0 on success, -1 if not a shebang script.
+static int parse_shebang(const char* path, char* interp, size_t interp_size) {
+    int fd = open(path, O_RDONLY);
+    if (fd < 0) return -1;
+    char buf[384];
+    int n = read(fd, buf, sizeof(buf) - 1);
+    close(fd);
+    if (n <= 2 || buf[0] != '#' || buf[1] != '!') return -1;
+
+    // Skip past "#!" and any whitespace
+    int pos = 2;
+    while (pos < n && (buf[pos] == ' ' || buf[pos] == '\t')) pos++;
+
+    // Copy interpreter path until whitespace or newline
+    int i = 0;
+    while (pos < n && buf[pos] != '\n' && buf[pos] != '\r') {
+        if (buf[pos] == ' ' || buf[pos] == '\t') break;
+        if (i < (int)interp_size - 1) interp[i++] = buf[pos];
+        pos++;
+    }
+    interp[i] = '\0';
+    return (i > 0) ? 0 : -1;
+}
+
+// Build new argv for executing an ELF binary through linker64:
+// [linker64, original_path, original_argv[1..n], NULL]
 static char** build_linker_argv(const char* pathname, char* const argv[]) {
     int argc = 0;
     while (argv && argv[argc]) argc++;
@@ -56,6 +93,25 @@ static char** build_linker_argv(const char* pathname, char* const argv[]) {
     return new_argv;
 }
 
+// Build new argv for executing a script through linker64 via its interpreter:
+// [linker64, interpreter_path, script_path, original_argv[1..n], NULL]
+static char** build_linker_argv_for_interp(const char* interp, const char* script,
+                                           char* const argv[]) {
+    int argc = 0;
+    while (argv && argv[argc]) argc++;
+
+    char** new_argv = malloc((argc + 4) * sizeof(char*));
+    if (!new_argv) return NULL;
+
+    new_argv[0] = (char*)SYSTEM_LINKER;
+    new_argv[1] = (char*)interp;
+    new_argv[2] = (char*)script;
+    for (int i = 1; i <= argc; i++) {
+        new_argv[i + 2] = argv[i];
+    }
+    return new_argv;
+}
+
 // Intercepted execve
 int execve(const char* pathname, char* const argv[], char* const envp[]) {
     static execve_func_t real_execve = NULL;
@@ -65,11 +121,28 @@ int execve(const char* pathname, char* const argv[], char* const envp[]) {
     }
 
     if (is_app_data_path(pathname)) {
-        char** new_argv = build_linker_argv(pathname, argv);
-        if (new_argv) {
-            int ret = real_execve(SYSTEM_LINKER, new_argv, envp);
-            free(new_argv);
-            return ret;
+        if (is_elf_binary(pathname)) {
+            // ELF binary -> redirect through system linker
+            char** new_argv = build_linker_argv(pathname, argv);
+            if (new_argv) {
+                int ret = real_execve(SYSTEM_LINKER, new_argv, envp);
+                free(new_argv);
+                return ret;
+            }
+        } else {
+            // Check if it's a script with shebang
+            char interp[384];
+            if (parse_shebang(pathname, interp, sizeof(interp)) == 0) {
+                // Script -> run interpreter via linker64 with script as arg
+                // This avoids the kernel's shebang handling which would fail
+                // when trying to exec the interpreter from app data
+                char** new_argv = build_linker_argv_for_interp(interp, pathname, argv);
+                if (new_argv) {
+                    int ret = real_execve(SYSTEM_LINKER, new_argv, envp);
+                    free(new_argv);
+                    return ret;
+                }
+            }
         }
     }
 
