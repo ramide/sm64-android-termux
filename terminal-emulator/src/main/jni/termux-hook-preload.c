@@ -55,18 +55,34 @@ static int is_app_data_path(const char* path) {
     return path && strncmp(path, APP_DATA_PREFIX, prefix_len) == 0;
 }
 
-// Helper: check if path is in the old Termux data directory
+// Helper: check if path is in the old Termux data directory.
+// Handles both /data/data/com.termux and ./data/data/com.termux (dpkg format).
 static int is_old_termux_path(const char* path) {
-    size_t prefix_len = strlen(OLD_TERMUX_PREFIX);
-    return path && strncmp(path, OLD_TERMUX_PREFIX, prefix_len) == 0;
+    if (!path) return 0;
+    const char* p = path;
+    // Skip leading "./" used by dpkg
+    if (p[0] == '.' && p[1] == '/') p += 2;
+    return strncmp(p, OLD_TERMUX_PREFIX, strlen(OLD_TERMUX_PREFIX)) == 0;
 }
 
 // Remap /data/data/com.termux -> /data/data/com.sm64builder in file paths.
+// Handles both /data/data/com.termux and ./data/data/com.termux (dpkg format).
 // Returns the original path if no remapping needed, otherwise writes to buf.
 static const char* remap_path(const char* path, char* buf, size_t size) {
+    if (!path) return path;
+    const char* p = path;
+    int dot_slash = 0;
+    if (p[0] == '.' && p[1] == '/') {
+        p += 2;
+        dot_slash = 1;
+    }
     size_t old_len = strlen(OLD_TERMUX_PREFIX);
-    if (path && strncmp(path, OLD_TERMUX_PREFIX, old_len) == 0) {
-        snprintf(buf, size, "%s%s", APP_DATA_PREFIX, path + old_len);
+    if (strncmp(p, OLD_TERMUX_PREFIX, old_len) == 0) {
+        if (dot_slash) {
+            snprintf(buf, size, "./%s%s", APP_DATA_PREFIX, p + old_len);
+        } else {
+            snprintf(buf, size, "%s%s", APP_DATA_PREFIX, p + old_len);
+        }
         return buf;
     }
     return path;
@@ -314,11 +330,19 @@ int utimensat(int dirfd, const char* pathname, const struct timespec times[2], i
         if (!real_utimensat) _exit(127);
     }
     char buf[4096];
-    // Only remap if absolute path (dirfd is AT_FDCWD or absolute)
-    const char* p = pathname;
-    if (pathname && pathname[0] == '/')
-        p = remap_path(pathname, buf, sizeof(buf));
+    const char* p = remap_path(pathname, buf, sizeof(buf));
     return real_utimensat(dirfd, p, times, flags);
+}
+
+// Intercept mkdir() — dpkg uses this to create directories during unpack
+int mkdir(const char* pathname, mode_t mode) {
+    static int (*real_mkdir)(const char*, mode_t) = NULL;
+    if (!real_mkdir) {
+        real_mkdir = dlsym(RTLD_NEXT, "mkdir");
+        if (!real_mkdir) _exit(127);
+    }
+    char buf[4096];
+    return real_mkdir(remap_path(pathname, buf, sizeof(buf)), mode);
 }
 
 // Intercepted execve
