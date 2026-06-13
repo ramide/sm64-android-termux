@@ -313,7 +313,7 @@ int openat(int dirfd, const char* path, int flags, ...) {
     }
     const char* p = path;
     char buf[4096];
-    if (path && path[0] == '/')
+    if (path && (path[0] == '/' || (path[0] == '.' && path[1] == '/')))
         p = remap_path(path, buf, sizeof(buf));
     if (flags & O_CREAT) {
         va_list ap; va_start(ap, flags);
