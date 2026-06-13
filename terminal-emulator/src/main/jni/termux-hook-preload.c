@@ -345,6 +345,12 @@ int mkdir(const char* pathname, mode_t mode) {
     return real_mkdir(remap_path(pathname, buf, sizeof(buf)), mode);
 }
 
+// ============================================================
+// Batch file operation interceptions: cover all functions dpkg
+// may use during package installation. Each remaps old Termux
+// paths to the current package data directory.
+// ============================================================
+
 // Intercept chmod() — dpkg uses this to set file permissions on .dpkg-new files
 int chmod(const char* pathname, mode_t mode) {
     static int (*real_chmod)(const char*, mode_t) = NULL;
@@ -356,7 +362,112 @@ int chmod(const char* pathname, mode_t mode) {
     return real_chmod(remap_path(pathname, buf, sizeof(buf)), mode);
 }
 
-// Intercepted execve
+// Intercept chown() — dpkg may use this to set file ownership
+int chown(const char* pathname, uid_t owner, gid_t group) {
+    static int (*real_chown)(const char*, uid_t, gid_t) = NULL;
+    if (!real_chown) {
+        real_chown = dlsym(RTLD_NEXT, "chown");
+        if (!real_chown) _exit(127);
+    }
+    char buf[4096];
+    return real_chown(remap_path(pathname, buf, sizeof(buf)), owner, group);
+}
+
+// Intercept symlink() — dpkg creates symlinks for conffiles
+int symlink(const char* target, const char* linkpath) {
+    static int (*real_symlink)(const char*, const char*) = NULL;
+    if (!real_symlink) {
+        real_symlink = dlsym(RTLD_NEXT, "symlink");
+        if (!real_symlink) _exit(127);
+    }
+    char buf[4096];
+    return real_symlink(target, remap_path(linkpath, buf, sizeof(buf)));
+}
+
+// Intercept unlink() — dpkg removes temp files
+int unlink(const char* pathname) {
+    static int (*real_unlink)(const char*) = NULL;
+    if (!real_unlink) {
+        real_unlink = dlsym(RTLD_NEXT, "unlink");
+        if (!real_unlink) _exit(127);
+    }
+    char buf[4096];
+    return real_unlink(remap_path(pathname, buf, sizeof(buf)));
+}
+
+// Intercept rmdir() — dpkg removes temp directories
+int rmdir(const char* pathname) {
+    static int (*real_rmdir)(const char*) = NULL;
+    if (!real_rmdir) {
+        real_rmdir = dlsym(RTLD_NEXT, "rmdir");
+        if (!real_rmdir) _exit(127);
+    }
+    char buf[4096];
+    return real_rmdir(remap_path(pathname, buf, sizeof(buf)));
+}
+
+// Intercept mkdirat() — dpkg may use this instead of mkdir()
+int mkdirat(int dirfd, const char* pathname, mode_t mode) {
+    static int (*real_mkdirat)(int, const char*, mode_t) = NULL;
+    if (!real_mkdirat) {
+        real_mkdirat = dlsym(RTLD_NEXT, "mkdirat");
+        if (!real_mkdirat) _exit(127);
+    }
+    char buf[4096];
+    const char* p = pathname;
+    if (pathname && (pathname[0] == '/' || (pathname[0] == '.' && pathname[1] == '/')))
+        p = remap_path(pathname, buf, sizeof(buf));
+    return real_mkdirat(dirfd, p, mode);
+}
+
+// Intercept fchmodat() — dpkg may use this instead of chmod()
+int fchmodat(int dirfd, const char* pathname, mode_t mode, int flags) {
+    static int (*real_fchmodat)(int, const char*, mode_t, int) = NULL;
+    if (!real_fchmodat) {
+        real_fchmodat = dlsym(RTLD_NEXT, "fchmodat");
+        if (!real_fchmodat) _exit(127);
+    }
+    char buf[4096];
+    const char* p = pathname;
+    if (pathname && (pathname[0] == '/' || (pathname[0] == '.' && pathname[1] == '/')))
+        p = remap_path(pathname, buf, sizeof(buf));
+    return real_fchmodat(dirfd, p, mode, flags);
+}
+
+// Intercept renameat() — dpkg may use this instead of rename()
+int renameat(int olddirfd, const char* oldpath, int newdirfd, const char* newpath) {
+    static int (*real_renameat)(int, const char*, int, const char*) = NULL;
+    if (!real_renameat) {
+        real_renameat = dlsym(RTLD_NEXT, "renameat");
+        if (!real_renameat) _exit(127);
+    }
+    char oldbuf[4096], newbuf[4096];
+    const char* op = oldpath;
+    const char* np = newpath;
+    if (oldpath && (oldpath[0] == '/' || (oldpath[0] == '.' && oldpath[1] == '/')))
+        op = remap_path(oldpath, oldbuf, sizeof(oldbuf));
+    if (newpath && (newpath[0] == '/' || (newpath[0] == '.' && newpath[1] == '/')))
+        np = remap_path(newpath, newbuf, sizeof(newbuf));
+    return real_renameat(olddirfd, op, newdirfd, np);
+}
+
+// Intercept unlinkat() — dpkg may use this instead of unlink()
+int unlinkat(int dirfd, const char* pathname, int flags) {
+    static int (*real_unlinkat)(int, const char*, int) = NULL;
+    if (!real_unlinkat) {
+        real_unlinkat = dlsym(RTLD_NEXT, "unlinkat");
+        if (!real_unlinkat) _exit(127);
+    }
+    char buf[4096];
+    const char* p = pathname;
+    if (pathname && (pathname[0] == '/' || (pathname[0] == '.' && pathname[1] == '/')))
+        p = remap_path(pathname, buf, sizeof(buf));
+    return real_unlinkat(dirfd, p, flags);
+}
+
+// ============================================================
+// Exec function interceptions
+// ============================================================
 int execve(const char* pathname, char* const argv[], char* const envp[]) {
     // Remap old Termux paths to current package path
     char remapped[4096];
