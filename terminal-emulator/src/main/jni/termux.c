@@ -187,40 +187,46 @@ static int create_subprocess(JNIEnv* env,
         DEBUG_WRITE("execvp failed: errno=%d (%s)\n", errno, strerror(errno));
 
         // ============================================================
-        // Android 16+ fallback: memfd_create + execveat
+        // Android 16+ fallback: use linker64 as program loader
         //
-        // On Android 16+, execvp() fails with EACCES for binaries
-        // inside app data dirs (/data/data/<pkg>/). We work around
-        // this by copying the binary into an anonymous memory file
-        // (memfd) and executing from there. The memfd has no
-        // filesystem path, so the kernel's path-based restriction
-        // doesn't apply. See the includes at the top of this file
-        // for the full rationale.
+        // execvp() and execveat() both fail with EACCES because
+        // Android 16 kernel security hooks deny exec-related
+        // syscalls for binaries loaded from app data dirs, even
+        // from anonymous memory files.
         //
-        // This code is only reached on Android 16+ where execvp()
-        // fails. On older versions execvp() succeeds and this
-        // fallback is never compiled into the execution path,
-        // ensuring zero performance impact on older devices.
+        // Workaround: invoke /system/bin/linker64 directly with
+        // the bash path as its argument. The linker opens the
+        // binary via open()+mmap (not execve), loads its shared
+        // library dependencies, and transfers control. Since
+        // open()+mmap from app data are allowed, this bypasses
+        // the kernel's exec restriction entirely.
+        //
+        // The linker is a system binary (/system/bin/linker64) so
+        // execve() on it is always permitted. It then loads bash
+        // as a regular file, not as an executable image — the
+        // kernel never checks bash's path.
+        //
+        // On Android 5-15, execvp() succeeds and this fallback
+        // is never reached — zero performance impact.
         // ============================================================
-        if (errno == EACCES && __NR_memfd_create > 0 && __NR_execveat > 0) {
-            DEBUG_WRITE("trying fallback: memfd_create + execveat\n");
-            int src_fd = open(cmd, O_RDONLY);
-            if (src_fd >= 0) {
-                // Create anonymous memory file (no filesystem path)
-                int memfd = syscall(__NR_memfd_create, "exec", MFD_CLOEXEC);
-                if (memfd >= 0) {
-                    // Copy binary content from app data into memfd
-                    char buf[8192];
-                    ssize_t n;
-                    while ((n = read(src_fd, buf, sizeof(buf))) > 0) {
-                        write(memfd, buf, n);
-                    }
-                    // Execute from memory — kernel can't trace to /data/data/
-                    syscall(__NR_execveat, memfd, "", argv, environ, AT_EMPTY_PATH);
-                    DEBUG_WRITE("execveat failed: errno=%d (%s)\n", errno, strerror(errno));
-                    close(memfd);
+        if (errno == EACCES) {
+            DEBUG_WRITE("trying fallback: linker64 as loader\n");
+            // Build argv for the linker: linker64 bash [args...]
+            // Count existing args (skip argv[0] which is the process name)
+            int arg_count = 0;
+            while (argv[arg_count] != NULL) arg_count++;
+            char** ld_argv = malloc((arg_count + 3) * sizeof(char*));
+            if (ld_argv != NULL) {
+                ld_argv[0] = "/system/bin/linker64";
+                ld_argv[1] = (char*)cmd;
+                // Copy remaining args starting from argv[1]
+                for (int i = 1; i <= arg_count; i++) {
+                    ld_argv[i + 1] = argv[i];
                 }
-                close(src_fd);
+                DEBUG_WRITE("trying: /system/bin/linker64 %s\n", cmd);
+                execve("/system/bin/linker64", ld_argv, environ);
+                DEBUG_WRITE("linker64 execve failed: errno=%d (%s)\n", errno, strerror(errno));
+                free(ld_argv);
             }
         }
 
