@@ -473,11 +473,13 @@ final class TermuxInstaller {
 
         String prefix = TermuxConstants.TERMUX_PREFIX_DIR_PATH;
         String content = "Dir \"" + prefix + "\";\n"
-            + "Dir::State \"var/lib/apt\";\n"
-            + "Dir::Cache \"var/cache/apt\";\n"
-            + "Dir::Etc \"etc/apt\";\n"
-            + "Dir::Bin::Methods \"lib/apt/methods\";\n"
-            + "Dir::Bin::AptKey \"" + prefix + "/bin/apt-key\";\n";
+            + "Dir::State \"" + prefix + "/var/lib/apt\";\n"
+            + "Dir::Cache \"" + prefix + "/var/cache/apt\";\n"
+            + "Dir::Etc \"" + prefix + "/etc/apt\";\n"
+            + "Dir::Temp \"" + prefix + "/tmp\";\n"
+            + "Dir::Bin::Methods \"" + prefix + "/lib/apt/methods\";\n"
+            + "Dir::Bin::AptKey \"" + prefix + "/bin/apt-key\";\n"
+            + "Dir::Bin::dpkg \"" + prefix + "/bin/dpkg\";\n";
         try (java.io.FileOutputStream fos = new java.io.FileOutputStream(configFile)) {
             fos.write(content.getBytes("UTF-8"));
             Logger.logInfo(LOG_TAG, "Created apt config override at " + configFile.getAbsolutePath());
