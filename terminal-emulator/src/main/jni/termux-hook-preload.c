@@ -95,32 +95,17 @@ static const char* remap_path(const char* path, char* buf, size_t size) {
         // Look for OLD_TERMUX_PREFIX after APP_DATA_PREFIX in the path
         const char* old_pos = strstr(p + app_prefix_len, OLD_TERMUX_PREFIX);
         if (old_pos) {
-            // Found OLD_TERMUX_PREFIX embedded — strip it out
-            // Build: prefix + everything_before_old + everything_after_old
-            size_t before_len = old_pos - p;
+            // Found OLD_TERMUX_PREFIX embedded at a deeper path level.
+            // This happens when a tool (like tar) receives an absolute path
+            // like /data/data/com.termux/... and the CWD is under the new
+            // prefix, producing: APP_PREFIX/cwd/data/data/com.termux/...
+            // Strip everything from the embedded OLD_TERMUX_PREFIX back,
+            // keeping only APP_PREFIX + everything after OLD_TERMUX_PREFIX.
             const char* after = old_pos + old_prefix_len;
             if (dot_slash) {
-                snprintf(buf, size, "./%s", APP_DATA_PREFIX);
-                size_t prefix_end = strlen(buf);
-                // Copy from the portion between the app prefix and the old prefix
-                size_t mid_start = app_prefix_len;
-                size_t mid_len = before_len - mid_start;
-                memcpy(buf + prefix_end, p + mid_start, mid_len);
-                prefix_end += mid_len;
-                // Copy the rest after old prefix
-                strncpy(buf + prefix_end, after, size - prefix_end - 1);
-                buf[size - 1] = '\0';
+                snprintf(buf, size, "./%s%s", APP_DATA_PREFIX, after);
             } else {
-                snprintf(buf, size, "%s", APP_DATA_PREFIX);
-                size_t prefix_end = app_prefix_len;
-                // Copy the portion between the two prefixes
-                size_t mid_start = app_prefix_len;
-                size_t mid_len = before_len - mid_start;
-                if (prefix_end + mid_len + strlen(after) < size) {
-                    memcpy(buf + prefix_end, p + mid_start, mid_len);
-                    prefix_end += mid_len;
-                    strcpy(buf + prefix_end, after);
-                }
+                snprintf(buf, size, "%s%s", APP_DATA_PREFIX, after);
             }
             return buf;
         }
