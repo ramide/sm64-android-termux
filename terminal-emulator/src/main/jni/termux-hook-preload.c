@@ -15,6 +15,7 @@
 // script wrappers or bash functions needed.
 // ============================================================
 #define _GNU_SOURCE
+#include <dirent.h>
 #include <dlfcn.h>
 #include <fcntl.h>
 #include <stdarg.h>
@@ -273,6 +274,17 @@ int access(const char* path, int mode) {
     }
     char buf[4096];
     return real_access(remap_path(path, buf, sizeof(buf)), mode);
+}
+
+// Intercept opendir() — apt uses this to check directory existence
+DIR *opendir(const char *name) {
+    static DIR *(*real_opendir)(const char*) = NULL;
+    if (!real_opendir) {
+        real_opendir = dlsym(RTLD_NEXT, "opendir");
+        if (!real_opendir) _exit(127);
+    }
+    char buf[4096];
+    return real_opendir(remap_path(name, buf, sizeof(buf)));
 }
 
 // Intercepted execve
