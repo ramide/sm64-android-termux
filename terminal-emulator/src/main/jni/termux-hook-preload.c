@@ -37,6 +37,8 @@
 
 // Old Termux path prefix that may appear in bootstrap scripts/configs
 #define OLD_TERMUX_PREFIX "/data/data/com.termux"
+// Same prefix without leading slash (for dpkg-format ./data/data/com.termux paths)
+#define OLD_TERMUX_PREFIX_REL "data/data/com.termux"
 
 // The system linker executable
 #define SYSTEM_LINKER "/system/bin/linker64"
@@ -62,13 +64,15 @@ static int is_app_data_path(const char* path) {
 }
 
 // Helper: check if path is in the old Termux data directory.
-// Handles both /data/data/com.termux and ./data/data/com.termux (dpkg format).
+// Handles both /data/data/com.termux and ./data/data/com.termux (dpkg format)
+// and data/data/com.termux (relative paths from tar extraction).
 static int is_old_termux_path(const char* path) {
     if (!path) return 0;
     const char* p = path;
-    // Skip leading "./" used by dpkg
+    // Skip leading "./" used by dpkg and tar
     if (p[0] == '.' && p[1] == '/') p += 2;
-    return strncmp(p, OLD_TERMUX_PREFIX, strlen(OLD_TERMUX_PREFIX)) == 0;
+    return strncmp(p, OLD_TERMUX_PREFIX, strlen(OLD_TERMUX_PREFIX)) == 0 ||
+           strncmp(p, OLD_TERMUX_PREFIX_REL, strlen(OLD_TERMUX_PREFIX_REL)) == 0;
 }
 
 // Remap /data/data/com.termux -> /data/data/com.sm64builder in file paths.
@@ -91,17 +95,23 @@ static const char* remap_path(const char* path, char* buf, size_t size) {
     // The OLD_TERMUX_PREFIX appears INSIDE the APP_DATA_PREFIX path.
     size_t app_prefix_len = strlen(APP_DATA_PREFIX);
     size_t old_prefix_len = strlen(OLD_TERMUX_PREFIX);
+    size_t old_rel_len = strlen(OLD_TERMUX_PREFIX_REL);
     if (strncmp(p, APP_DATA_PREFIX, app_prefix_len) == 0) {
         // Look for OLD_TERMUX_PREFIX after APP_DATA_PREFIX in the path
         const char* old_pos = strstr(p + app_prefix_len, OLD_TERMUX_PREFIX);
+        // Also check for relative form (without leading /)
+        if (!old_pos)
+            old_pos = strstr(p + app_prefix_len, OLD_TERMUX_PREFIX_REL);
         if (old_pos) {
             // Found OLD_TERMUX_PREFIX embedded at a deeper path level.
-            // This happens when a tool (like tar) receives an absolute path
-            // like /data/data/com.termux/... and the CWD is under the new
-            // prefix, producing: APP_PREFIX/cwd/data/data/com.termux/...
             // Strip everything from the embedded OLD_TERMUX_PREFIX back,
             // keeping only APP_PREFIX + everything after OLD_TERMUX_PREFIX.
-            const char* after = old_pos + old_prefix_len;
+            const char* after;
+            // Use relative old prefix to compute after (no leading slash added)
+            if (strncmp(old_pos, OLD_TERMUX_PREFIX_REL, old_rel_len) == 0)
+                after = old_pos + old_rel_len;
+            else
+                after = old_pos + old_prefix_len;
             if (dot_slash) {
                 snprintf(buf, size, "./%s%s", APP_DATA_PREFIX, after);
             } else {
@@ -113,11 +123,21 @@ static const char* remap_path(const char* path, char* buf, size_t size) {
 
     // Standard old prefix remapping
     size_t old_len = strlen(OLD_TERMUX_PREFIX);
+    size_t old_rel_len = strlen(OLD_TERMUX_PREFIX_REL);
     if (strncmp(p, OLD_TERMUX_PREFIX, old_len) == 0) {
         if (dot_slash) {
             snprintf(buf, size, "./%s%s", APP_DATA_PREFIX, p + old_len);
         } else {
             snprintf(buf, size, "%s%s", APP_DATA_PREFIX, p + old_len);
+        }
+        return buf;
+    }
+    // Also check for relative form (without leading /)
+    if (strncmp(p, OLD_TERMUX_PREFIX_REL, old_rel_len) == 0) {
+        if (dot_slash) {
+            snprintf(buf, size, "./%s/%s", APP_DATA_PREFIX, p + old_rel_len);
+        } else {
+            snprintf(buf, size, "%s/%s", APP_DATA_PREFIX, p + old_rel_len);
         }
         return buf;
     }
@@ -654,8 +674,22 @@ int execve(const char* pathname, char* const argv[], char* const envp[]) {
     // Remap old Termux paths to current package path
     char remapped[4096];
     if (is_old_termux_path(pathname)) {
-        snprintf(remapped, sizeof(remapped), "%s%s", APP_DATA_PREFIX,
-                 pathname + strlen(OLD_TERMUX_PREFIX));
+        const char* p = pathname;
+        int dot_slash = 0;
+        if (p[0] == '.' && p[1] == '/') { p += 2; dot_slash = 1; }
+        if (strncmp(p, OLD_TERMUX_PREFIX_REL, strlen(OLD_TERMUX_PREFIX_REL)) == 0) {
+            // Relative form: data/data/com.termux/...
+            if (dot_slash)
+                snprintf(remapped, sizeof(remapped), "./%s/%s", APP_DATA_PREFIX, p + strlen(OLD_TERMUX_PREFIX_REL));
+            else
+                snprintf(remapped, sizeof(remapped), "%s/%s", APP_DATA_PREFIX, p + strlen(OLD_TERMUX_PREFIX_REL));
+        } else {
+            // Absolute form: /data/data/com.termux/...
+            if (dot_slash)
+                snprintf(remapped, sizeof(remapped), "./%s%s", APP_DATA_PREFIX, p + strlen(OLD_TERMUX_PREFIX));
+            else
+                snprintf(remapped, sizeof(remapped), "%s%s", APP_DATA_PREFIX, p + strlen(OLD_TERMUX_PREFIX));
+        }
         pathname = remapped;
     }
 
@@ -701,8 +735,15 @@ int execvp(const char* file, char* const argv[]) {
     // Remap old Termux paths to current package path
     char remapped[4096];
     if (file && is_old_termux_path(file)) {
-        snprintf(remapped, sizeof(remapped), "%s%s", APP_DATA_PREFIX,
-                 file + strlen(OLD_TERMUX_PREFIX));
+        const char* p = file;
+        if (p[0] == '.' && p[1] == '/') p += 2;
+        if (strncmp(p, OLD_TERMUX_PREFIX_REL, strlen(OLD_TERMUX_PREFIX_REL)) == 0) {
+            snprintf(remapped, sizeof(remapped), "%s/%s", APP_DATA_PREFIX,
+                     p + strlen(OLD_TERMUX_PREFIX_REL));
+        } else {
+            snprintf(remapped, sizeof(remapped), "%s%s", APP_DATA_PREFIX,
+                     p + strlen(OLD_TERMUX_PREFIX));
+        }
         file = remapped;
     }
 
