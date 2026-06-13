@@ -112,6 +112,7 @@ final class TermuxInstaller {
                 fixPrefixPaths();
                 setupAptConfig();
                 setupDpkgConfig();
+                fixGpgKeys();
                 fixApkPermissions();
                 copyExecHookLibrary(activity);
                 whenDone.run();
@@ -233,6 +234,9 @@ final class TermuxInstaller {
 
                     // Setup dpkg config to use this fork's package path
                     setupDpkgConfig();
+
+                    // Fix GPG key symlinks pointing to old com.termux paths
+                    fixGpgKeys();
 
                     // Make APK files read-only (Android 16 blocks writable dex files)
                     fixApkPermissions();
@@ -500,7 +504,52 @@ final class TermuxInstaller {
             Logger.logError(LOG_TAG, "Failed to create dpkg config override: " + e.getMessage());
         }
     }
-    private static void fixApkPermissions() {
+
+    /** Fix GPG key symlinks pointing to old /data/data/com.termux paths. */
+    private static void fixGpgKeys() {
+        File gpgDir = new File(TermuxConstants.TERMUX_PREFIX_DIR_PATH + "/etc/apt/trusted.gpg.d");
+        if (!gpgDir.isDirectory()) return;
+        File keyringDir = new File(TermuxConstants.TERMUX_PREFIX_DIR_PATH + "/share/termux-keyring");
+        if (!keyringDir.isDirectory()) return;
+
+        File[] symlinks = gpgDir.listFiles(f -> f.isFile());
+        if (symlinks == null) return;
+
+        String oldPrefix = "/data/data/com.termux";
+        String newPrefix = "/data/data/" + TermuxConstants.TERMUX_PACKAGE_NAME;
+
+        for (File symlink : symlinks) {
+            try {
+                String target = symlink.getCanonicalPath();
+                // If the symlink isn't broken AND already points to the correct path, skip
+                if (target.startsWith(newPrefix)) continue;
+
+                // Resolve the actual file from the correct keyring directory
+                File realKey = new File(keyringDir, symlink.getName());
+                if (!realKey.exists()) {
+                    // Try reading the symlink target to find the key name
+                    String linkTarget = new String(java.nio.file.Files.readAllBytes(symlink.toPath()), "UTF-8");
+                    // Extract just the filename from the full path
+                    String keyName = linkTarget.substring(linkTarget.lastIndexOf('/') + 1).trim();
+                    realKey = new File(keyringDir, keyName);
+                }
+
+                if (realKey.exists()) {
+                    // Replace the broken symlink with a copy of the actual key file
+                    symlink.delete();
+                    Error error = FileUtils.copyFile("gpg key", realKey.getAbsolutePath(),
+                        symlink.getAbsolutePath(), false);
+                    if (error == null) {
+                        Logger.logInfo(LOG_TAG, "Fixed GPG key: " + symlink.getName());
+                    }
+                }
+            } catch (Exception e) {
+                Logger.logError(LOG_TAG, "Failed to fix GPG key " + symlink.getName() + ": " + e.getMessage());
+            }
+        }
+    }
+
+    /** Make APK files read-only (Android 16 blocks loading writable dex files). */
         File libexecDir = new File(TERMUX_PREFIX_DIR_PATH + "/libexec");
         if (!libexecDir.isDirectory()) return;
         File[] apkFiles = libexecDir.listFiles((java.io.FileFilter) f ->
