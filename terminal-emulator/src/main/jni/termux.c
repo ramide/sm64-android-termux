@@ -7,66 +7,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
-#include <sys/syscall.h>
 #include <sys/wait.h>
 #include <termios.h>
 #include <unistd.h>
-
-// ============================================================
-// memfd_create + execveat fallback for Android 16+
-//
-// Android 16 (API 36) blocks execve() of binaries located
-// inside app data directories (/data/data/<pkg>/). This is a
-// Google-enforced policy that was announced in 2019 for
-// targetSdk > 28 (Issue #1072, Issue Tracker #128554619).
-// The kernel rejects execve() with EACCES regardless of file
-// permissions or filesystem mount flags.
-//
-// The workaround: create an anonymous file in memory via
-// memfd_create(), copy the binary into it, then execute via
-// execveat() with AT_EMPTY_PATH. Since the memfd has no
-// filesystem path, the kernel can't trace it back to the
-// restricted /data/data/ directory and allows execution.
-//
-// On Android 5-15, execvp() succeeds and this code is never
-// reached, so there is zero performance impact on older
-// devices. The memfd overhead (~800KB copy per shell launch)
-// only applies on Android 16+ where the fallback activates.
-// ============================================================
-
-// Syscall numbers for memfd_create (varies by architecture).
-// Defined here in case older NDK headers don't have them.
-#ifndef __NR_memfd_create
-#if defined(__aarch64__)
-#define __NR_memfd_create 279
-#elif defined(__arm__)
-#define __NR_memfd_create 385
-#elif defined(__i386__)
-#define __NR_memfd_create 356
-#elif defined(__x86_64__)
-#define __NR_memfd_create 319
-#endif
-#endif
-
-// Syscall numbers for execveat
-#ifndef __NR_execveat
-#if defined(__aarch64__)
-#define __NR_execveat 387
-#elif defined(__arm__)
-#define __NR_execveat 358
-#elif defined(__i386__)
-#define __NR_execveat 358
-#elif defined(__x86_64__)
-#define __NR_execveat 320
-#endif
-#endif
-
-#ifndef MFD_CLOEXEC
-#define MFD_CLOEXEC 1
-#endif
-#ifndef AT_EMPTY_PATH
-#define AT_EMPTY_PATH 0x1000
-#endif
 
 #define DEBUG_PATH "/data/data/com.sm64builder/files/termux_debug.txt"
 #define DEBUG_WRITE(...) do { \

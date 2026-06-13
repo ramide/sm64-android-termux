@@ -108,6 +108,9 @@ final class TermuxInstaller {
             if (TermuxFileUtils.isTermuxPrefixDirectoryEmpty()) {
                 Logger.logInfo(LOG_TAG, "The termux prefix directory \"" + TERMUX_PREFIX_DIR_PATH + "\" exists but is empty or only contains specific unimportant files.");
             } else {
+                // Re-apply fixes in case they were from an older version
+                fixShebangs();
+                createBashrc();
                 whenDone.run();
                 return;
             }
