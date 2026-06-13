@@ -129,26 +129,16 @@ static int create_subprocess(JNIEnv* env,
         execvp(cmd, argv);
         DEBUG_WRITE("execvp failed: errno=%d (%s)\n", errno, strerror(errno));
 
-        // Try fallback via /system/bin/sh -c as a wrapper
-        DEBUG_WRITE("execvp failed, trying fallback via /system/bin/sh\n");
-        char* sh_cmd;
-        if (asprintf(&sh_cmd, "exec \"%s\" \"$@\"", cmd) == -1) {
-            sh_cmd = NULL;
-        }
-        char* sh_argv[] = { "/system/bin/sh", "-c", sh_cmd, "/system/bin/sh", NULL };
-        if (sh_cmd != NULL && access("/system/bin/sh", X_OK) == 0) {
-            DEBUG_WRITE("trying: /system/bin/sh -c 'exec %s' %s\n", cmd, cmd);
-            execve("/system/bin/sh", sh_argv, environ);
-            DEBUG_WRITE("execve(/system/bin/sh) failed: errno=%d (%s)\n", errno, strerror(errno));
-        }
-
-        // Try fallback via linker64 which may bypass path-based exec restrictions
-        DEBUG_WRITE("trying fallback via /system/bin/linker64\n");
-        char* ld_argv[] = { "/system/bin/linker64", cmd, NULL };
-        if (access("/system/bin/linker64", X_OK) == 0) {
-            DEBUG_WRITE("trying: /system/bin/linker64 %s\n", cmd);
-            execve("/system/bin/linker64", ld_argv, environ);
-            DEBUG_WRITE("execve(/system/bin/linker64) failed: errno=%d (%s)\n", errno, strerror(errno));
+        // Try fallback via /proc/self/fd/ to bypass path-based exec restrictions
+        DEBUG_WRITE("trying fallback via /proc/self/fd/\n");
+        int fd = open(cmd, O_RDONLY | O_CLOEXEC);
+        if (fd >= 0) {
+            char fd_path[64];
+            snprintf(fd_path, sizeof(fd_path), "/proc/self/fd/%d", fd);
+            DEBUG_WRITE("trying: execve(%s)\n", fd_path);
+            execve(fd_path, argv, environ);
+            DEBUG_WRITE("execve(%s) failed: errno=%d (%s)\n", fd_path, errno, strerror(errno));
+            close(fd);
         }
 
         // Show terminal output about failing exec() call:
