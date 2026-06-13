@@ -476,7 +476,8 @@ final class TermuxInstaller {
             + "Dir::State \"var/lib/apt\";\n"
             + "Dir::Cache \"var/cache/apt\";\n"
             + "Dir::Etc \"etc/apt\";\n"
-            + "Dir::Bin::Methods \"lib/apt/methods\";\n";
+            + "Dir::Bin::Methods \"lib/apt/methods\";\n"
+            + "Dir::Bin::AptKey \"" + prefix + "/bin/apt-key\";\n";
         try (java.io.FileOutputStream fos = new java.io.FileOutputStream(configFile)) {
             fos.write(content.getBytes("UTF-8"));
             Logger.logInfo(LOG_TAG, "Created apt config override at " + configFile.getAbsolutePath());
