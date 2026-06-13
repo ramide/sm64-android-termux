@@ -30,6 +30,9 @@
 // The system linker executable
 #define SYSTEM_LINKER "/system/bin/linker64"
 
+// The PREFIX (Dir) path for apt
+#define PREFIX_PATH APP_DATA_PREFIX "/files/usr"
+
 // Type signatures for exec variants
 typedef int (*execve_func_t)(const char*, char* const[], char* const[]);
 typedef int (*execvp_func_t)(const char*, char* const[]);
@@ -112,6 +115,51 @@ static char** build_linker_argv(const char* pathname, char* const argv[]) {
     return new_argv;
 }
 
+// Check if the binary name matches apt or apt-get
+static int is_apt_command(const char* pathname) {
+    const char* base = strrchr(pathname, '/');
+    if (!base) base = pathname; else base++;
+    return strcmp(base, "apt") == 0 || strcmp(base, "apt-get") == 0 ||
+           strcmp(base, "apt-cache") == 0 || strcmp(base, "apt-config") == 0 ||
+           strcmp(base, "apt-mark") == 0;
+}
+
+// Build argv for apt/apt-get with -o flags to override compiled-in paths.
+// These have highest priority in apt's config system and ensure all
+// directory paths point to the correct package prefix instead of the
+// compiled-in default (/data/data/com.termux/...).
+static char** build_linker_argv_for_apt(const char* pathname, char* const argv[]) {
+    int argc = 0;
+    while (argv && argv[argc]) argc++;
+
+    // -o options to override apt's compiled-in paths
+    const char* opts[] = {
+        "-o", "Dir=" PREFIX_PATH,
+        "-o", "Dir::State=" PREFIX_PATH "/var/lib/apt",
+        "-o", "Dir::Cache=" PREFIX_PATH "/var/cache/apt",
+        "-o", "Dir::Etc=" PREFIX_PATH "/etc/apt",
+        "-o", "Dir::Temp=" PREFIX_PATH "/tmp",
+        "-o", "Dir::Bin::Methods=" PREFIX_PATH "/lib/apt/methods",
+        "-o", "Dir::Bin::AptKey=" PREFIX_PATH "/bin/apt-key",
+        "-o", "Dir::Bin::dpkg=" PREFIX_PATH "/bin/dpkg",
+    };
+    int opt_count = sizeof(opts) / sizeof(opts[0]);
+
+    // Allocate: linker64 + original_path + options + original_argv[1..n] + NULL
+    char** new_argv = malloc((argc + 3 + opt_count) * sizeof(char*));
+    if (!new_argv) return NULL;
+
+    int pos = 0;
+    new_argv[pos++] = (char*)SYSTEM_LINKER;
+    new_argv[pos++] = (char*)pathname;
+    for (int i = 0; i < opt_count; i++)
+        new_argv[pos++] = (char*)opts[i];
+    for (int i = 1; i <= argc; i++)
+        new_argv[pos++] = argv[i];
+
+    return new_argv;
+}
+
 // Build new argv for executing a script through linker64 via its interpreter:
 // [linker64, interpreter_path, script_path, original_argv[1..n], NULL]
 static char** build_linker_argv_for_interp(const char* interp, const char* script,
@@ -142,7 +190,10 @@ int execve(const char* pathname, char* const argv[], char* const envp[]) {
     if (is_app_data_path(pathname)) {
         if (is_elf_binary(pathname)) {
             // ELF binary -> redirect through system linker
-            char** new_argv = build_linker_argv(pathname, argv);
+            // For apt/apt-get, inject -o flags to override compiled-in paths
+            char** new_argv = is_apt_command(pathname)
+                ? build_linker_argv_for_apt(pathname, argv)
+                : build_linker_argv(pathname, argv);
             if (new_argv) {
                 int ret = real_execve(SYSTEM_LINKER, new_argv, envp);
                 free(new_argv);
