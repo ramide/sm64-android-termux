@@ -395,6 +395,31 @@ int unlink(const char* pathname) {
     return real_unlink(remap_path(pathname, buf, sizeof(buf)));
 }
 
+// Intercept readlink() — dpkg reads symlinks for conffile handling
+ssize_t readlink(const char* pathname, char* buf, size_t size) {
+    static ssize_t (*real_readlink)(const char*, char*, size_t) = NULL;
+    if (!real_readlink) {
+        real_readlink = dlsym(RTLD_NEXT, "readlink");
+        if (!real_readlink) _exit(127);
+    }
+    char pbuf[4096];
+    return real_readlink(remap_path(pathname, pbuf, sizeof(pbuf)), buf, size);
+}
+
+// Intercept readlinkat() — alternative to readlink()
+ssize_t readlinkat(int dirfd, const char* pathname, char* buf, size_t size) {
+    static ssize_t (*real_readlinkat)(int, const char*, char*, size_t) = NULL;
+    if (!real_readlinkat) {
+        real_readlinkat = dlsym(RTLD_NEXT, "readlinkat");
+        if (!real_readlinkat) _exit(127);
+    }
+    char pbuf[4096];
+    const char* p = pathname;
+    if (pathname && (pathname[0] == '/' || (pathname[0] == '.' && pathname[1] == '/')))
+        p = remap_path(pathname, pbuf, sizeof(pbuf));
+    return real_readlinkat(dirfd, p, buf, size);
+}
+
 // Intercept rmdir() — dpkg removes temp directories
 int rmdir(const char* pathname) {
     static int (*real_rmdir)(const char*) = NULL;
