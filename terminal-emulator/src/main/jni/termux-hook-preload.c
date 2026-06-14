@@ -40,24 +40,11 @@
 // Same prefix without leading slash (for dpkg-format ./data/data/com.termux paths)
 #define OLD_TERMUX_PREFIX_REL "data/data/com.termux"
 
-// The PREFIX (Dir) path for apt
-#define PREFIX_PATH APP_DATA_PREFIX "/files/usr"
-
 // Type signatures for exec variants
-typedef int (*execve_func_t)(const char*, char* const[], char* const[]);
 typedef int (*execvp_func_t)(const char*, char* const[]);
 
-// Forward declaration for environ
-extern char **environ;
-
-// The real execve function, resolved via dlsym(RTLD_NEXT)
-static execve_func_t real_execve = NULL;
-
-// Helper: check if path is in the app data directory (for execute remapping)
-static int is_app_data_path(const char* path) {
-    size_t prefix_len = strlen(APP_DATA_PREFIX);
-    return path && strncmp(path, APP_DATA_PREFIX, prefix_len) == 0;
-}
+// The real execvp function, resolved via dlsym(RTLD_NEXT)
+static execvp_func_t real_execvp = NULL;
 
 // Helper: check if path is in the old Termux data directory.
 // Handles both /data/data/com.termux and ./data/data/com.termux (dpkg format)
