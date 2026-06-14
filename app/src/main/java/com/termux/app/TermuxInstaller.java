@@ -249,6 +249,9 @@ final class TermuxInstaller {
                     // Copy LD_PRELOAD hook library from APK native libs to $PREFIX/lib
                     copyExecHookLibrary(activity);
 
+                    // Setup SM64 builder menu and build scripts
+                    setupMenuScripts(activity);
+
                     // Recreate env file since termux prefix was wiped earlier
                     TermuxShellEnvironment.writeEnvironmentToFile(activity);
 
@@ -623,6 +626,75 @@ final class TermuxInstaller {
             Logger.logInfo(LOG_TAG, "Copied exec hook library to " + targetPath);
         } else {
             Logger.logError(LOG_TAG, "Failed to copy exec hook library: " + error.toString());
+        }
+    }
+
+    private static void setupMenuScripts(Context context) {
+        String binDir = TermuxConstants.TERMUX_PREFIX_DIR_PATH + "/bin";
+        String homeDir = TermuxConstants.TERMUX_HOME_DIR_PATH;
+
+        // Ensure ~/.termux directory exists
+        File termuxDir = new File(homeDir, ".termux");
+        if (!termuxDir.isDirectory()) {
+            termuxDir.mkdirs();
+        }
+
+        // Write SM64 builder menu script
+        String menuScript = "#!/data/data/com.sm64builder/files/usr/bin/bash\n"
+            + "# SM64 Builder Menu\n"
+            + "PREFIX=/data/data/com.sm64builder/files/usr\n"
+            + "HOME=$PREFIX/home\n"
+            + "PATH=$PREFIX/bin:/system/bin\n"
+            + "LD_LIBRARY_PATH=$PREFIX/lib\n"
+            + "LD_PRELOAD=$PREFIX/lib/libtermux-exec-hook.so\n"
+            + "export PREFIX HOME PATH LD_LIBRARY_PATH LD_PRELOAD\n"
+            + "mkdir -p ~/.termux 2>/dev/null\n"
+            + "ln -sf $PREFIX/etc/motd.sh ~/.termux/motd.sh 2>/dev/null\n"
+            + "show_menu() {\n"
+            + "echo -e \""
+            + "\\\\e[1;33m====== SM64 Builder ======\\\\e[0m\\n"
+            + "\\\\e[32m1)\\\\e[0m \\\\e[31mSM64EX 60fps Internal\\\\e[0m\\n"
+            + "\\\\e[32m0)\\\\e[0m \\\\e[31mExit\\\\e[0m\\n"
+            + "\\\\e[34mChoose: \\\\e[0m \"\n"
+            + "    read a\n"
+            + "    case $a in\n"
+            + "        1) build_sm64_int ;;\n"
+            + "        0) exit 0 ;;\n"
+            + "        *) echo \"Wrong option.\"; show_menu ;;\n"
+            + "    esac\n"
+            + "}\n"
+            + "build_sm64_int() {\n"
+            + "    echo \"=== SM64 INT Build ===\"\n"
+            + "    cd $HOME\n"
+            + "    rm -rf sm64-build 2>/dev/null\n"
+            + "    mkdir -p sm64-build\n"
+            + "    cd sm64-build\n"
+            + "    echo \"Downloading source...\"\n"
+            + "    wget -q -O sm64.zip \"https://github.com/izzy2fancy/sm64-izzys-port-android/archive/refs/heads/ex/nightly.zip\"\n"
+            + "    python3 -c \"import zipfile; zipfile.ZipFile('sm64.zip').extractall('.')\"\n"
+            + "    cd sm64-izzys-port-android-ex-nightly\n"
+            + "    cp ../baserom.us.z64 . 2>/dev/null || cp /storage/emulated/0/Download/baserom.us.z64 . 2>/dev/null\n"
+            + "    echo \"Extracting assets...\"\n"
+            + "    python3 extract_assets.py us 2>/dev/null\n"
+            + "    echo \"Building...\"\n"
+            + "    make -f MakefileINT 2>&1 | tee build.log\n"
+            + "    APK=\$(find build -name \"*.apk\" 2>/dev/null | head -1)\n"
+            + "    if [ -n \"\$APK\" ]; then\n"
+            + "        cp \"\$APK\" /storage/emulated/0/\n"
+            + "        echo \"APK copied to /storage/emulated/0/\"\n"
+            + "    else\n"
+            + "        echo \"Build failed. Check build.log\"\n"
+            + "    fi\n"
+            + "}\n"
+            + "show_menu\n";
+
+        File scriptFile = new File(binDir, "sm64_menu.sh");
+        try (FileOutputStream fos = new FileOutputStream(scriptFile)) {
+            fos.write(menuScript.getBytes("UTF-8"));
+            scriptFile.setExecutable(true);
+            Logger.logInfo(LOG_TAG, "Created SM64 menu script at " + scriptFile.getAbsolutePath());
+        } catch (Exception e) {
+            Logger.logError(LOG_TAG, "Failed to create SM64 menu script: " + e.getMessage());
         }
     }
 
