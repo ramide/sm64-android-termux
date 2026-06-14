@@ -32,6 +32,11 @@
 #define SYS_readlinkat 78
 #endif
 
+// Fallback if NDK doesn't define SYS_openat (ARM64 Linux syscall #56)
+#ifndef SYS_openat
+#define SYS_openat 56
+#endif
+
 // The app data directory prefix we check against
 #define APP_DATA_PREFIX "/data/data/com.sm64builder"
 
@@ -292,47 +297,11 @@ static char** build_linker_argv_for_interp(const char* interp, const char* scrip
 // ============================================================
 
 // Intercept open() — remap old Termux paths in file paths.
-// Also intercepts /proc/self/cmdline to provide corrected argv
-// (skipping the linker and binary path entries from execve).
 int open(const char* path, int flags, ...) {
     static int (*real_open)(const char*, int, ...) = NULL;
     if (!real_open) {
         real_open = dlsym(RTLD_NEXT, "open");
         if (!real_open) _exit(127);
-    }
-
-    // Intercept /proc/self/cmdline: strip the first 2 null-terminated
-    // entries (linker path and binary path added by our execve hook)
-    // so that tools like clang which read cmdline for argv[0]
-    // get the correct program name.
-    if (path && strcmp(path, "/proc/self/cmdline") == 0 && !(flags & O_CREAT)) {
-        int real_fd = real_open(path, flags);
-        if (real_fd < 0) return real_fd;
-        char buf[4096];
-        ssize_t n = read(real_fd, buf, sizeof(buf) - 1);
-        close(real_fd);
-        if (n > 0) {
-            buf[n] = '\0';
-            // Skip first 2 entries (linker path, binary path)
-            int entry = 0;
-            size_t pos = 0;
-            while (pos < (size_t)n && entry < 2) {
-                if (buf[pos] == '\0') entry++;
-                pos++;
-            }
-            if (pos < (size_t)n) {
-                // Create pipe with corrected data
-                int p[2];
-                if (pipe(p) == 0) {
-                    ssize_t remaining = n - pos;
-                    write(p[1], buf + pos, remaining);
-                    close(p[1]);
-                    return p[0];
-                }
-            }
-        }
-        // Fallback: reopen
-        return real_open(path, flags);
     }
 
     char rbuf[4096];
@@ -346,40 +315,11 @@ int open(const char* path, int flags, ...) {
 }
 
 // Intercept openat() — remap paths for absolute/relative paths.
-// Also intercepts /proc/self/cmdline similar to open().
 int openat(int dirfd, const char* path, int flags, ...) {
     static int (*real_openat)(int, const char*, int, ...) = NULL;
     if (!real_openat) {
         real_openat = dlsym(RTLD_NEXT, "openat");
         if (!real_openat) _exit(127);
-    }
-
-    // Same /proc/self/cmdline interception as open()
-    if (path && strcmp(path, "/proc/self/cmdline") == 0 && !(flags & O_CREAT)) {
-        int real_fd = real_openat(dirfd, path, flags);
-        if (real_fd < 0) return real_fd;
-        char buf[4096];
-        ssize_t n = read(real_fd, buf, sizeof(buf) - 1);
-        close(real_fd);
-        if (n > 0) {
-            buf[n] = '\0';
-            int entry = 0;
-            size_t pos = 0;
-            while (pos < (size_t)n && entry < 2) {
-                if (buf[pos] == '\0') entry++;
-                pos++;
-            }
-            if (pos < (size_t)n) {
-                int p[2];
-                if (pipe(p) == 0) {
-                    ssize_t remaining = n - pos;
-                    write(p[1], buf + pos, remaining);
-                    close(p[1]);
-                    return p[0];
-                }
-            }
-        }
-        return real_openat(dirfd, path, flags);
     }
 
     const char* p = path;
@@ -531,17 +471,32 @@ static int is_linker_path(const char* path) {
 }
 
 // Read argv[0] from /proc/self/cmdline.
-// NOTE: Our open() hook now strips the first 2 cmdline entries
-// (linker path and binary path), so the first entry here is
-// the actual target executable's argv[0].
+// Uses direct syscall to bypass our own open/read hooks.
+// The kernel cmdline after our execve workaround is:
+//   linker64\0pathname\0argv[1]\0argv[2]\0...
+// We skip 1 entry (linker64 path) and return entry[1] (pathname),
+// which is the absolute path of the loaded binary.
 static int read_self_argv0(char* buf, size_t size) {
-    int fd = open("/proc/self/cmdline", O_RDONLY);
+    int fd = syscall(SYS_openat, AT_FDCWD, "/proc/self/cmdline", O_RDONLY, 0);
     if (fd < 0) return -1;
     ssize_t n = read(fd, buf, size - 1);
     close(fd);
     if (n <= 0) return -1;
     buf[n] = '\0';
-    return 0;
+
+    // Skip 1 entry (linker64 path at index 0)
+    size_t pos = 0;
+    int entry = 0;
+    while (pos < (size_t)n && entry < 1) {
+        if (buf[pos] == '\0') entry++;
+        pos++;
+    }
+    if (pos < (size_t)n) {
+        // Shift entry[1] (pathname) to start of buffer
+        memmove(buf, buf + pos, n - pos + 1);
+        return 0;
+    }
+    return -1;
 }
 
 // Resolve /proc/self/exe to the actual executable path.
