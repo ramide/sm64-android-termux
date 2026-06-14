@@ -708,6 +708,59 @@ final class TermuxInstaller {
         } catch (Exception e) {
             Logger.logError(LOG_TAG, "Failed to create SM64 menu script: " + e.getMessage());
         }
+
+        // ── Patch build-sm64ex-INT.sh ──
+        // 1) Replace lines 3-7 (storage check + pkg install) with true
+        // 2) Replace git clone with wget+python3 (HTTPS is broken)
+        String intScriptPath = binDir + "/build-sm64ex-INT.sh";
+        File intScriptFile = new File(intScriptPath);
+        if (intScriptFile.isFile()) {
+            try {
+                // Read file content (API 21+ compatible)
+                java.io.FileInputStream fis = new java.io.FileInputStream(intScriptFile);
+                byte[] data = new byte[(int) intScriptFile.length()];
+                fis.read(data);
+                fis.close();
+                String content = new String(data, "UTF-8");
+                boolean changed = false;
+
+                // Patch 1: storage check block (lines 3-7)
+                String oldStorage = "if ! ls /storage/emulated/0 >/dev/null 2>&1\nthen\n    yes | pkg install termux-am\n\tyes | termux-setup-storage\t\nfi";
+                String newStorage = "true";
+                if (content.contains(oldStorage)) {
+                    content = content.replace(oldStorage, newStorage);
+                    changed = true;
+                }
+
+                // Patch 2: skip failing pkg install (dpkg configure broken)
+                String oldPkgInstall = "yes | pkg install git wget mesa-dev make python getconf zip apksigner clang binutils libglvnd-dev aapt which netcat-openbsd";
+                String newPkgInstall = "# packages skipped - install manually via apt-get download + dpkg-deb -x";
+                if (content.contains(oldPkgInstall)) {
+                    content = content.replace(oldPkgInstall, newPkgInstall);
+                    changed = true;
+                }
+
+                // Patch 3: git clone → wget + python3
+                String oldGit = "git clone --recursive https://github.com/izzy2fancy/sm64-izzys-port-android.git";
+                String newWget =
+                    "wget -q -O sm64.zip \"https://github.com/izzy2fancy/sm64-izzys-port-android/archive/refs/heads/ex/nightly.zip\" && "
+                    + "python3 -c \"import zipfile,os; zipfile.ZipFile('sm64.zip').extractall('.'); "
+                    + "os.rename('sm64-izzys-port-android-ex-nightly', 'sm64-izzys-port-android')\"";
+                if (content.contains(oldGit)) {
+                    content = content.replace(oldGit, newWget);
+                    changed = true;
+                }
+
+                if (changed) {
+                    java.io.FileOutputStream fos = new java.io.FileOutputStream(intScriptFile);
+                    fos.write(content.getBytes("UTF-8"));
+                    fos.close();
+                    Logger.logInfo(LOG_TAG, "Patched build-sm64ex-INT.sh (storage + pkg + git)");
+                }
+            } catch (Exception e) {
+                Logger.logError(LOG_TAG, "Failed to patch build-sm64ex-INT.sh: " + e.getMessage());
+            }
+        }
     }
 
     public static byte[] loadZipBytes() {
