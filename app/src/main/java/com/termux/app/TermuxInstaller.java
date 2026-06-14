@@ -116,6 +116,7 @@ final class TermuxInstaller {
                 fixGpgKeys();
                 fixApkPermissions();
                 copyExecHookLibrary(activity);
+                setupMenuScripts(activity);
                 whenDone.run();
                 return;
             }
