@@ -41,6 +41,7 @@
 #define OLD_TERMUX_PREFIX_REL "data/data/com.termux"
 
 // Type signatures for exec variants
+typedef int (*execve_func_t)(const char*, char* const[], char* const[]);
 typedef int (*execvp_func_t)(const char*, char* const[]);
 
 // The real execvp function, resolved via dlsym(RTLD_NEXT)
