@@ -641,59 +641,70 @@ final class TermuxInstaller {
         }
 
         // Write SM64 builder menu script
-        String menuScript = "#!/data/data/com.sm64builder/files/usr/bin/bash\n"
-            + "# SM64 Builder Menu\n"
-            + "PREFIX=/data/data/com.sm64builder/files/usr\n"
-            + "HOME=$PREFIX/home\n"
-            + "PATH=$PREFIX/bin:/system/bin\n"
-            + "LD_LIBRARY_PATH=$PREFIX/lib\n"
-            + "LD_PRELOAD=$PREFIX/lib/libtermux-exec-hook.so\n"
-            + "export PREFIX HOME PATH LD_LIBRARY_PATH LD_PRELOAD\n"
-            + "mkdir -p ~/.termux 2>/dev/null\n"
-            + "ln -sf $PREFIX/etc/motd.sh ~/.termux/motd.sh 2>/dev/null\n"
-            + "show_menu() {\n"
-            + "echo -e \""
-            + "\\\\e[1;33m====== SM64 Builder ======\\\\e[0m\\n"
-            + "\\\\e[32m1)\\\\e[0m \\\\e[31mSM64EX 60fps Internal\\\\e[0m\\n"
-            + "\\\\e[32m0)\\\\e[0m \\\\e[31mExit\\\\e[0m\\n"
-            + "\\\\e[34mChoose: \\\\e[0m \"\n"
-            + "    read a\n"
-            + "    case $a in\n"
-            + "        1) build_sm64_int ;;\n"
-            + "        0) exit 0 ;;\n"
-            + "        *) echo \"Wrong option.\"; show_menu ;;\n"
-            + "    esac\n"
-            + "}\n"
-            + "build_sm64_int() {\n"
-            + "    echo \"=== SM64 INT Build ===\"\n"
-            + "    cd $HOME\n"
-            + "    rm -rf sm64-build 2>/dev/null\n"
-            + "    mkdir -p sm64-build\n"
-            + "    cd sm64-build\n"
-            + "    echo \"Downloading source...\"\n"
-            + "    wget -q -O sm64.zip \"https://github.com/izzy2fancy/sm64-izzys-port-android/archive/refs/heads/ex/nightly.zip\"\n"
-            + "    python3 -c \"import zipfile; zipfile.ZipFile('sm64.zip').extractall('.')\"\n"
-            + "    cd sm64-izzys-port-android-ex-nightly\n"
-            + "    cp ../baserom.us.z64 . 2>/dev/null || cp /storage/emulated/0/Download/baserom.us.z64 . 2>/dev/null\n"
-            + "    echo \"Extracting assets...\"\n"
-            + "    python3 extract_assets.py us 2>/dev/null\n"
-            + "    echo \"Building...\"\n"
-            + "    make -f MakefileINT 2>&1 | tee build.log\n"
-            + "    APK=\\$(find build -name \"*.apk\" 2>/dev/null | head -1)\n"
-            + "    if [ -n \"\\$APK\" ]; then\n"
-            + "        cp \"\\$APK\" /storage/emulated/0/\n"
-            + "        echo \"APK copied to /storage/emulated/0/\"\n"
-            + "    else\n"
-            + "        echo \"Build failed. Check build.log\"\n"
-            + "    fi\n"
-            + "}\n"
-            + "show_menu\n";
+        StringBuilder sb = new StringBuilder();
+        sb.append("#!/data/data/com.sm64builder/files/usr/bin/bash\n");
+        sb.append("# SM64 Builder Menu\n");
+        sb.append("PREFIX=/data/data/com.sm64builder/files/usr\n");
+        sb.append("HOME=$PREFIX/home\n");
+        sb.append("PATH=$PREFIX/bin:/system/bin\n");
+        sb.append("LD_LIBRARY_PATH=$PREFIX/lib\n");
+        sb.append("LD_PRELOAD=$PREFIX/lib/libtermux-exec-hook.so\n");
+        sb.append("export PREFIX HOME PATH LD_LIBRARY_PATH LD_PRELOAD\n");
+        sb.append("mkdir -p ~/.termux 2>/dev/null\n");
+        sb.append("ln -sf $PREFIX/etc/motd.sh ~/.termux/motd.sh 2>/dev/null\n");
+        sb.append("\n");
+        sb.append("show_menu() {\n");
+        sb.append("echo \"====== SM64 Builder ======\"\n");
+        sb.append("echo \"1) SM64EX COOP\"\n");
+        sb.append("echo \"2) SM64EX COOP RENDER96\"\n");
+        sb.append("echo \"3) SM64EX OMM\"\n");
+        sb.append("echo \"4) SM64EX ALO\"\n");
+        sb.append("echo \"5) SM64EX 60fps External\"\n");
+        sb.append("echo \"6) SM64EX 60fps Internal\"\n");
+        sb.append("echo \"7) SM64EX EXT No Touch\"\n");
+        sb.append("echo \"8) SM64EX INT No Touch\"\n");
+        sb.append("echo \"9) SM64EX Porcino\"\n");
+        sb.append("echo \"10) Star Road\"\n");
+        sb.append("echo \"0) Exit\"\n");
+        sb.append("echo -n \"Choose: \"\n");
+        sb.append("read a\n");
+        sb.append("case $a in\n");
+        sb.append("    1) run_build build-sm64ex-coop.sh ;;\n");
+        sb.append("    2) run_build build-sm64ex-coop-render96.sh ;;\n");
+        sb.append("    3) run_build build-sm64ex-omm.sh ;;\n");
+        sb.append("    4) run_build build-sm64ex-alo.sh ;;\n");
+        sb.append("    5) run_build build-sm64ex-EXT.sh ;;\n");
+        sb.append("    6) run_build build-sm64ex-INT.sh ;;\n");
+        sb.append("    7) run_build build-sm64ex-EXTnoTouch.sh ;;\n");
+        sb.append("    8) run_build build-sm64ex-INTnoTouch.sh ;;\n");
+        sb.append("    9) run_build build-sm64ex-porcino.sh ;;\n");
+        sb.append("    10) run_build build-starroad.sh ;;\n");
+        sb.append("    0) exit 0 ;;\n");
+        sb.append("    *) echo \"Wrong option.\"; show_menu ;;\n");
+        sb.append("esac\n");
+        sb.append("show_menu\n");
+        sb.append("}\n");
+        sb.append("\n");
+        sb.append("run_build() {\n");
+        sb.append("    script=\"$1\"\n");
+        sb.append("    if [ -x \"$PREFIX/bin/$script\" ]; then\n");
+        sb.append("        \"$PREFIX/bin/$script\"\n");
+        sb.append("    else\n");
+        sb.append("        echo \"Build script $script not found\"\n");
+        sb.append("        echo \"The bootstrap may not include this variant yet.\"\n");
+        sb.append("    fi\n");
+        sb.append("    echo \"Press Enter to return to menu\"\n");
+        sb.append("    read dummy\n");
+        sb.append("    show_menu\n");
+        sb.append("}\n");
+        sb.append("\n");
+        sb.append("show_menu\n");
 
-        File scriptFile = new File(binDir, "sm64_menu.sh");
-        try (FileOutputStream fos = new FileOutputStream(scriptFile)) {
-            fos.write(menuScript.getBytes("UTF-8"));
-            scriptFile.setExecutable(true);
-            Logger.logInfo(LOG_TAG, "Created SM64 menu script at " + scriptFile.getAbsolutePath());
+        File menuFile = new File(binDir, "sm64_menu.sh");
+        try (FileOutputStream fos = new FileOutputStream(menuFile)) {
+            fos.write(sb.toString().getBytes("UTF-8"));
+            menuFile.setExecutable(true);
+            Logger.logInfo(LOG_TAG, "Created SM64 menu script at " + menuFile.getAbsolutePath());
         } catch (Exception e) {
             Logger.logError(LOG_TAG, "Failed to create SM64 menu script: " + e.getMessage());
         }
