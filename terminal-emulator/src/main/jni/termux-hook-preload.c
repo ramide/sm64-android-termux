@@ -198,19 +198,21 @@ static int parse_shebang(const char* path, char* interp, size_t interp_size) {
 }
 
 // Build new argv for executing an ELF binary through linker64:
-// [linker64, original_path, original_argv[0..n], NULL]
+// The Android linker passes argv+1 to the loaded binary (stripping its own
+// path but keeping our pathname as argv[0]). So new_argv is:
+// [linker64, pathname, original_argv[1..n], NULL]
 static char** build_linker_argv(const char* pathname, char* const argv[]) {
     int argc = 0;
     while (argv && argv[argc]) argc++;
-    // +2 for linker64 and pathname, +1 for argv[0] (previously skipped),
-    // +1 for NULL terminator
-    char** new_argv = malloc((argc + 4) * sizeof(char*));
+
+    char** new_argv = malloc((argc + 3) * sizeof(char*));
     if (!new_argv) return NULL;
 
     new_argv[0] = (char*)SYSTEM_LINKER;
     new_argv[1] = (char*)pathname;
-    for (int i = 0; i <= argc; i++) {
-        new_argv[i + 2] = argv[i];
+    // Skip argv[0] — linker provides pathname as argv[0] for the target
+    for (int i = 1; i <= argc; i++) {
+        new_argv[i + 1] = argv[i];
     }
     return new_argv;
 }
@@ -246,8 +248,8 @@ static char** build_linker_argv_for_apt(const char* pathname, char* const argv[]
     };
     int opt_count = sizeof(opts) / sizeof(opts[0]);
 
-    // Allocate: linker64 + original_path + options + original_argv[0..n] + NULL
-    char** new_argv = malloc((argc + 4 + opt_count) * sizeof(char*));
+    // Allocate: linker64 + original_path + options + original_argv[1..n] + NULL
+    char** new_argv = malloc((argc + 3 + opt_count) * sizeof(char*));
     if (!new_argv) return NULL;
 
     int pos = 0;
@@ -255,28 +257,30 @@ static char** build_linker_argv_for_apt(const char* pathname, char* const argv[]
     new_argv[pos++] = (char*)pathname;
     for (int i = 0; i < opt_count; i++)
         new_argv[pos++] = (char*)opts[i];
-    for (int i = 0; i <= argc; i++)
+    // Skip argv[0] — linker provides pathname as argv[0]
+    for (int i = 1; i <= argc; i++)
         new_argv[pos++] = argv[i];
 
     return new_argv;
 }
 
 // Build new argv for executing a script through linker64 via its interpreter:
-// [linker64, interpreter_path, script_path, original_argv[0..n], NULL]
+// [linker64, interpreter_path, script_path, original_argv[1..n], NULL]
 static char** build_linker_argv_for_interp(const char* interp, const char* script,
                                            char* const argv[]) {
     int argc = 0;
     while (argv && argv[argc]) argc++;
 
-    // +3 for linker64, interp, script; +1 for argv[0]; +1 for NULL
-    char** new_argv = malloc((argc + 5) * sizeof(char*));
+    // +3 for linker64, interp, script; +1 for NULL
+    char** new_argv = malloc((argc + 4) * sizeof(char*));
     if (!new_argv) return NULL;
 
     new_argv[0] = (char*)SYSTEM_LINKER;
     new_argv[1] = (char*)interp;
     new_argv[2] = (char*)script;
-    for (int i = 0; i <= argc; i++) {
-        new_argv[i + 3] = argv[i];
+    // Skip argv[0] — linker provides pathname as argv[0]
+    for (int i = 1; i <= argc; i++) {
+        new_argv[i + 2] = argv[i];
     }
     return new_argv;
 }
