@@ -44,6 +44,84 @@
 typedef int (*execve_func_t)(const char*, char* const[], char* const[]);
 typedef int (*execvp_func_t)(const char*, char* const[]);
 
+// The system linker executable (for exec'ing scripts through linker64)
+#define SYSTEM_LINKER "/system/bin/linker64"
+
+// Helper: check if path is in the app data directory
+static int is_app_data_path(const char* path) {
+    size_t prefix_len = strlen(APP_DATA_PREFIX);
+    return path && strncmp(path, APP_DATA_PREFIX, prefix_len) == 0;
+}
+
+// Helper: check if file is an ELF binary by reading its magic bytes
+static int is_elf_binary(const char* path) {
+    int fd = open(path, O_RDONLY);
+    if (fd < 0) return 0;
+    char magic[4];
+    int n = read(fd, magic, 4);
+    close(fd);
+    return (n == 4) && magic[0] == 0x7f && magic[1] == 'E' &&
+           magic[2] == 'L' && magic[3] == 'F';
+}
+
+// Helper: parse shebang from a script file and extract interpreter path.
+// Returns 0 on success, -1 if not a shebang script.
+// Remaps old Termux paths in the interpreter path.
+static int parse_shebang(const char* path, char* interp, size_t interp_size) {
+    int fd = open(path, O_RDONLY);
+    if (fd < 0) return -1;
+    char buf[384];
+    int n = read(fd, buf, sizeof(buf) - 1);
+    close(fd);
+    if (n <= 2 || buf[0] != '#' || buf[1] != '!') return -1;
+
+    int pos = 2;
+    while (pos < n && (buf[pos] == ' ' || buf[pos] == '\t')) pos++;
+
+    int i = 0;
+    while (pos < n && buf[pos] != '\n' && buf[pos] != '\r') {
+        if (buf[pos] == ' ' || buf[pos] == '\t') break;
+        if (i < (int)interp_size - 1) interp[i++] = buf[pos];
+        pos++;
+    }
+    interp[i] = '\0';
+    if (i <= 0) return -1;
+
+    // Remap old Termux prefix to current package path
+    size_t old_len = strlen(OLD_TERMUX_PREFIX);
+    size_t new_len = strlen(APP_DATA_PREFIX);
+    if (strncmp(interp, OLD_TERMUX_PREFIX, old_len) == 0) {
+        char *tail = interp + old_len;
+        size_t tail_len = strlen(tail) + 1;
+        if (new_len + tail_len > interp_size) return -1;
+        if (old_len != new_len) {
+            memmove(interp + new_len, tail, tail_len);
+        }
+        memcpy(interp, APP_DATA_PREFIX, new_len);
+    }
+    return 0;
+}
+
+// Build new argv for executing a script through linker64 via its interpreter:
+// [linker64, interpreter_path, script_path, original_argv[1..n], NULL]
+static char** build_linker_argv_for_interp(const char* interp, const char* script,
+                                           char* const argv[]) {
+    int argc = 0;
+    while (argv && argv[argc]) argc++;
+
+    char** new_argv = malloc((argc + 4) * sizeof(char*));
+    if (!new_argv) return NULL;
+
+    new_argv[0] = (char*)SYSTEM_LINKER;
+    new_argv[1] = (char*)interp;
+    new_argv[2] = (char*)script;
+    // Skip argv[0] — linker provides script path as argv[0]
+    for (int i = 1; i <= argc; i++) {
+        new_argv[i + 2] = argv[i];
+    }
+    return new_argv;
+}
+
 // Helper: check if path is in the old Termux data directory.
 // Handles both /data/data/com.termux and ./data/data/com.termux (dpkg format)
 // and data/data/com.termux (relative paths from tar extraction).
@@ -297,9 +375,6 @@ int unlink(const char* pathname) {
     return real_unlink(remap_path(pathname, buf, sizeof(buf)));
 }
 
-// Check if the real readlink result for /proc/self/exe is a linker binary.
-// Returns 1 if the path contains "linker64" (indicating we were launched
-// via the linker workaround and /proc/self/exe is wrong).
 // Intercept readlink() — dpkg reads symlinks for conffile handling.
 // Also remaps old Termux paths.
 ssize_t readlink(const char* pathname, char* buf, size_t size) {
@@ -397,10 +472,10 @@ int unlinkat(int dirfd, const char* pathname, int flags) {
 }
 
 // ============================================================
-// Exec function interceptions — simplified: only remap old paths,
-// no linker64 redirect. The kernel allows direct exec of app data
-// binaries from subprocesses on Android 16+. The initial shell
-// exec is handled by termux.c's linker64 fallback.
+// Exec function interceptions
+// ELF binaries: exec'd directly by kernel (works on Android 16).
+// Scripts in app data: redirect through linker64 since the kernel's
+// shebang handling can't exec the interpreter (also in app data).
 // ============================================================
 int execve(const char* pathname, char* const argv[], char* const envp[]) {
     // Remap old Termux paths to current package path
@@ -428,6 +503,22 @@ int execve(const char* pathname, char* const argv[], char* const envp[]) {
         real_execve = (execve_func_t)dlsym(RTLD_NEXT, "execve");
         if (!real_execve) _exit(127);
     }
+
+    // Scripts in app data: kernel can't exec the shebang interpreter
+    // (it's also in app data, blocked by Android 16). Redirect through
+    // linker64 which loads the interpreter via open()+mmap.
+    if (is_app_data_path(pathname) && !is_elf_binary(pathname)) {
+        char interp[384];
+        if (parse_shebang(pathname, interp, sizeof(interp)) == 0) {
+            char** new_argv = build_linker_argv_for_interp(interp, pathname, argv);
+            if (new_argv) {
+                int ret = real_execve(SYSTEM_LINKER, new_argv, envp);
+                free(new_argv);
+                return ret;
+            }
+        }
+    }
+
     return real_execve(pathname, argv, envp);
 }
 
