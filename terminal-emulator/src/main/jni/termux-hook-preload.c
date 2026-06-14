@@ -297,11 +297,46 @@ static char** build_linker_argv_for_interp(const char* interp, const char* scrip
 // ============================================================
 
 // Intercept open() — remap old Termux paths in file paths.
+// Also intercepts /proc/self/cmdline to strip the linker64 path
+// that our execve workaround prepends to the command line.
 int open(const char* path, int flags, ...) {
     static int (*real_open)(const char*, int, ...) = NULL;
     if (!real_open) {
         real_open = dlsym(RTLD_NEXT, "open");
         if (!real_open) _exit(127);
+    }
+
+    // Intercept /proc/self/cmdline: strip the first entry (linker64 path)
+    // so that LLVM on Android (which reads cmdline for getMainExecutable)
+    // gets the actual binary path instead of linker64.
+    if (path && strcmp(path, "/proc/self/cmdline") == 0 && !(flags & O_CREAT)) {
+        int real_fd = real_open(path, flags);
+        if (real_fd < 0) return real_fd;
+        char buf[4096];
+        ssize_t n = read(real_fd, buf, sizeof(buf) - 1);
+        close(real_fd);
+        if (n > 0) {
+            buf[n] = '\0';
+            // Strip 1 entry (linker64 path at index 0)
+            size_t pos = 0;
+            int entry = 0;
+            while (pos < (size_t)n && entry < 1) {
+                if (buf[pos] == '\0') entry++;
+                pos++;
+            }
+            if (pos < (size_t)n) {
+                // Create pipe with corrected data
+                int p[2];
+                if (pipe(p) == 0) {
+                    ssize_t remaining = n - pos;
+                    write(p[1], buf + pos, remaining);
+                    close(p[1]);
+                    return p[0];
+                }
+            }
+        }
+        // Fallback: reopen
+        return real_open(path, flags);
     }
 
     char rbuf[4096];
@@ -315,11 +350,41 @@ int open(const char* path, int flags, ...) {
 }
 
 // Intercept openat() — remap paths for absolute/relative paths.
+// Also intercepts /proc/self/cmdline like open().
 int openat(int dirfd, const char* path, int flags, ...) {
     static int (*real_openat)(int, const char*, int, ...) = NULL;
     if (!real_openat) {
         real_openat = dlsym(RTLD_NEXT, "openat");
         if (!real_openat) _exit(127);
+    }
+
+    // Same /proc/self/cmdline interception as open()
+    if (path && strcmp(path, "/proc/self/cmdline") == 0 && !(flags & O_CREAT)) {
+        int real_fd = real_openat(dirfd, path, flags);
+        if (real_fd < 0) return real_fd;
+        char buf[4096];
+        ssize_t n = read(real_fd, buf, sizeof(buf) - 1);
+        close(real_fd);
+        if (n > 0) {
+            buf[n] = '\0';
+            // Strip 1 entry (linker64 path at index 0)
+            size_t pos = 0;
+            int entry = 0;
+            while (pos < (size_t)n && entry < 1) {
+                if (buf[pos] == '\0') entry++;
+                pos++;
+            }
+            if (pos < (size_t)n) {
+                int p[2];
+                if (pipe(p) == 0) {
+                    ssize_t remaining = n - pos;
+                    write(p[1], buf + pos, remaining);
+                    close(p[1]);
+                    return p[0];
+                }
+            }
+        }
+        return real_openat(dirfd, path, flags);
     }
 
     const char* p = path;
