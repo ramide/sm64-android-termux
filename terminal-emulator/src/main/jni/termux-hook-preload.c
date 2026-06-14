@@ -44,9 +44,6 @@
 typedef int (*execve_func_t)(const char*, char* const[], char* const[]);
 typedef int (*execvp_func_t)(const char*, char* const[]);
 
-// The real execvp function, resolved via dlsym(RTLD_NEXT)
-static execvp_func_t real_execvp = NULL;
-
 // Helper: check if path is in the old Termux data directory.
 // Handles both /data/data/com.termux and ./data/data/com.termux (dpkg format)
 // and data/data/com.termux (relative paths from tar extraction).
