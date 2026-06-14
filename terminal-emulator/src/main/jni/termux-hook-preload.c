@@ -32,11 +32,6 @@
 #define SYS_readlinkat 78
 #endif
 
-// Fallback if NDK doesn't define SYS_openat (ARM64 Linux syscall #56)
-#ifndef SYS_openat
-#define SYS_openat 56
-#endif
-
 // The app data directory prefix we check against
 #define APP_DATA_PREFIX "/data/data/com.sm64builder"
 
@@ -44,9 +39,6 @@
 #define OLD_TERMUX_PREFIX "/data/data/com.termux"
 // Same prefix without leading slash (for dpkg-format ./data/data/com.termux paths)
 #define OLD_TERMUX_PREFIX_REL "data/data/com.termux"
-
-// The system linker executable
-#define SYSTEM_LINKER "/system/bin/linker64"
 
 // The PREFIX (Dir) path for apt
 #define PREFIX_PATH APP_DATA_PREFIX "/files/usr"
@@ -59,10 +51,9 @@ typedef int (*execvp_func_t)(const char*, char* const[]);
 extern char **environ;
 
 // The real execve function, resolved via dlsym(RTLD_NEXT)
-// Shared between execve() and execvp() interceptors.
 static execve_func_t real_execve = NULL;
 
-// Helper: check if path is in the app data directory
+// Helper: check if path is in the app data directory (for execute remapping)
 static int is_app_data_path(const char* path) {
     size_t prefix_len = strlen(APP_DATA_PREFIX);
     return path && strncmp(path, APP_DATA_PREFIX, prefix_len) == 0;
@@ -148,148 +139,6 @@ static const char* remap_path(const char* path, char* buf, size_t size) {
     return path;
 }
 
-// Helper: check if file is an ELF binary by reading its magic bytes
-static int is_elf_binary(const char* path) {
-    int fd = open(path, O_RDONLY);
-    if (fd < 0) return 0;
-    char magic[4];
-    int n = read(fd, magic, 4);
-    close(fd);
-    return (n == 4) && magic[0] == 0x7f && magic[1] == 'E' &&
-           magic[2] == 'L' && magic[3] == 'F';
-}
-
-// Helper: parse shebang from a script file and extract interpreter path.
-// Returns 0 on success, -1 if not a shebang script.
-// Automatically remaps /data/data/com.termux paths to the correct package path.
-static int parse_shebang(const char* path, char* interp, size_t interp_size) {
-    int fd = open(path, O_RDONLY);
-    if (fd < 0) return -1;
-    char buf[384];
-    int n = read(fd, buf, sizeof(buf) - 1);
-    close(fd);
-    if (n <= 2 || buf[0] != '#' || buf[1] != '!') return -1;
-
-    // Skip past "#!" and any whitespace
-    int pos = 2;
-    while (pos < n && (buf[pos] == ' ' || buf[pos] == '\t')) pos++;
-
-    // Copy interpreter path until whitespace or newline
-    int i = 0;
-    while (pos < n && buf[pos] != '\n' && buf[pos] != '\r') {
-        if (buf[pos] == ' ' || buf[pos] == '\t') break;
-        if (i < (int)interp_size - 1) interp[i++] = buf[pos];
-        pos++;
-    }
-    interp[i] = '\0';
-    if (i <= 0) return -1;
-
-    // Remap old Termux prefix to current package path
-    size_t old_len = strlen(OLD_TERMUX_PREFIX);
-    size_t new_len = strlen(APP_DATA_PREFIX);
-    if (strncmp(interp, OLD_TERMUX_PREFIX, old_len) == 0) {
-        // Shift the path tail and insert new prefix
-        char *tail = interp + old_len;
-        size_t tail_len = strlen(tail) + 1;
-        // Guard against buffer overflow: new prefix + tail must fit
-        if (new_len + tail_len > interp_size) return -1;
-        if (old_len != new_len) {
-            // Need to shift: move tail to make room for new prefix length
-            memmove(interp + new_len, tail, tail_len);
-        }
-        memcpy(interp, APP_DATA_PREFIX, new_len);
-    }
-    return 0;
-}
-
-// Build new argv for executing an ELF binary through linker64:
-// The Android linker passes argv+1 to the loaded binary (stripping its own
-// path but keeping our pathname as argv[0]). So new_argv is:
-// [linker64, pathname, original_argv[1..n], NULL]
-static char** build_linker_argv(const char* pathname, char* const argv[]) {
-    int argc = 0;
-    while (argv && argv[argc]) argc++;
-
-    char** new_argv = malloc((argc + 3) * sizeof(char*));
-    if (!new_argv) return NULL;
-
-    new_argv[0] = (char*)SYSTEM_LINKER;
-    new_argv[1] = (char*)pathname;
-    // Skip argv[0] — linker provides pathname as argv[0] for the target
-    for (int i = 1; i <= argc; i++) {
-        new_argv[i + 1] = argv[i];
-    }
-    return new_argv;
-}
-
-// Check if the binary name matches apt or apt-get
-static int is_apt_command(const char* pathname) {
-    const char* base = strrchr(pathname, '/');
-    if (!base) base = pathname; else base++;
-    return strcmp(base, "apt") == 0 || strcmp(base, "apt-get") == 0 ||
-           strcmp(base, "apt-cache") == 0 || strcmp(base, "apt-config") == 0 ||
-           strcmp(base, "apt-mark") == 0;
-}
-
-// Build argv for apt/apt-get with -o flags to override compiled-in paths.
-// These have highest priority in apt's config system and ensure all
-// directory paths point to the correct package prefix instead of the
-// compiled-in default (/data/data/com.termux/...).
-static char** build_linker_argv_for_apt(const char* pathname, char* const argv[]) {
-    int argc = 0;
-    while (argv && argv[argc]) argc++;
-
-    // -o options to override apt's compiled-in paths
-    const char* opts[] = {
-        "-o", "Dir=" PREFIX_PATH,
-        "-o", "Dir::State=" PREFIX_PATH "/var/lib/apt",
-        "-o", "Dir::Cache=" PREFIX_PATH "/var/cache/apt",
-        "-o", "Dir::Etc=" PREFIX_PATH "/etc/apt",
-        "-o", "Dir::Temp=" PREFIX_PATH "/tmp",
-        "-o", "Dir::Bin::Methods=" PREFIX_PATH "/lib/apt/methods",
-        "-o", "Dir::Bin::apt-key=" PREFIX_PATH "/bin/apt-key",
-        "-o", "Dir::Bin::dpkg=" PREFIX_PATH "/bin/dpkg",
-        "-o", "Acquire::https::CaInfo=" PREFIX_PATH "/etc/tls/cert.pem",
-    };
-    int opt_count = sizeof(opts) / sizeof(opts[0]);
-
-    // Allocate: linker64 + original_path + options + original_argv[1..n] + NULL
-    char** new_argv = malloc((argc + 3 + opt_count) * sizeof(char*));
-    if (!new_argv) return NULL;
-
-    int pos = 0;
-    new_argv[pos++] = (char*)SYSTEM_LINKER;
-    new_argv[pos++] = (char*)pathname;
-    for (int i = 0; i < opt_count; i++)
-        new_argv[pos++] = (char*)opts[i];
-    // Skip argv[0] — linker provides pathname as argv[0]
-    for (int i = 1; i <= argc; i++)
-        new_argv[pos++] = argv[i];
-
-    return new_argv;
-}
-
-// Build new argv for executing a script through linker64 via its interpreter:
-// [linker64, interpreter_path, script_path, original_argv[1..n], NULL]
-static char** build_linker_argv_for_interp(const char* interp, const char* script,
-                                           char* const argv[]) {
-    int argc = 0;
-    while (argv && argv[argc]) argc++;
-
-    // +3 for linker64, interp, script; +1 for NULL
-    char** new_argv = malloc((argc + 4) * sizeof(char*));
-    if (!new_argv) return NULL;
-
-    new_argv[0] = (char*)SYSTEM_LINKER;
-    new_argv[1] = (char*)interp;
-    new_argv[2] = (char*)script;
-    // Skip argv[0] — linker provides pathname as argv[0]
-    for (int i = 1; i <= argc; i++) {
-        new_argv[i + 2] = argv[i];
-    }
-    return new_argv;
-}
-
 // ============================================================
 // File operation interceptions: remap old Termux paths
 // at the libc level. This catches all hardcoded /data/data/
@@ -297,46 +146,11 @@ static char** build_linker_argv_for_interp(const char* interp, const char* scrip
 // ============================================================
 
 // Intercept open() — remap old Termux paths in file paths.
-// Also intercepts /proc/self/cmdline to strip the linker64 path
-// that our execve workaround prepends to the command line.
 int open(const char* path, int flags, ...) {
     static int (*real_open)(const char*, int, ...) = NULL;
     if (!real_open) {
         real_open = dlsym(RTLD_NEXT, "open");
         if (!real_open) _exit(127);
-    }
-
-    // Intercept /proc/self/cmdline: strip the first entry (linker64 path)
-    // so that LLVM on Android (which reads cmdline for getMainExecutable)
-    // gets the actual binary path instead of linker64.
-    if (path && strcmp(path, "/proc/self/cmdline") == 0 && !(flags & O_CREAT)) {
-        int real_fd = real_open(path, flags);
-        if (real_fd < 0) return real_fd;
-        char buf[4096];
-        ssize_t n = read(real_fd, buf, sizeof(buf) - 1);
-        close(real_fd);
-        if (n > 0) {
-            buf[n] = '\0';
-            // Strip 1 entry (linker64 path at index 0)
-            size_t pos = 0;
-            int entry = 0;
-            while (pos < (size_t)n && entry < 1) {
-                if (buf[pos] == '\0') entry++;
-                pos++;
-            }
-            if (pos < (size_t)n) {
-                // Create pipe with corrected data
-                int p[2];
-                if (pipe(p) == 0) {
-                    ssize_t remaining = n - pos;
-                    write(p[1], buf + pos, remaining);
-                    close(p[1]);
-                    return p[0];
-                }
-            }
-        }
-        // Fallback: reopen
-        return real_open(path, flags);
     }
 
     char rbuf[4096];
@@ -350,41 +164,11 @@ int open(const char* path, int flags, ...) {
 }
 
 // Intercept openat() — remap paths for absolute/relative paths.
-// Also intercepts /proc/self/cmdline like open().
 int openat(int dirfd, const char* path, int flags, ...) {
     static int (*real_openat)(int, const char*, int, ...) = NULL;
     if (!real_openat) {
         real_openat = dlsym(RTLD_NEXT, "openat");
         if (!real_openat) _exit(127);
-    }
-
-    // Same /proc/self/cmdline interception as open()
-    if (path && strcmp(path, "/proc/self/cmdline") == 0 && !(flags & O_CREAT)) {
-        int real_fd = real_openat(dirfd, path, flags);
-        if (real_fd < 0) return real_fd;
-        char buf[4096];
-        ssize_t n = read(real_fd, buf, sizeof(buf) - 1);
-        close(real_fd);
-        if (n > 0) {
-            buf[n] = '\0';
-            // Strip 1 entry (linker64 path at index 0)
-            size_t pos = 0;
-            int entry = 0;
-            while (pos < (size_t)n && entry < 1) {
-                if (buf[pos] == '\0') entry++;
-                pos++;
-            }
-            if (pos < (size_t)n) {
-                int p[2];
-                if (pipe(p) == 0) {
-                    ssize_t remaining = n - pos;
-                    write(p[1], buf + pos, remaining);
-                    close(p[1]);
-                    return p[0];
-                }
-            }
-        }
-        return real_openat(dirfd, path, flags);
     }
 
     const char* p = path;
@@ -531,109 +315,9 @@ int unlink(const char* pathname) {
 // Check if the real readlink result for /proc/self/exe is a linker binary.
 // Returns 1 if the path contains "linker64" (indicating we were launched
 // via the linker workaround and /proc/self/exe is wrong).
-static int is_linker_path(const char* path) {
-    return path && (strstr(path, "linker64") != NULL);
-}
-
-// Read argv[0] from /proc/self/cmdline.
-// Uses direct syscall to bypass our own open/read hooks.
-// The kernel cmdline after our execve workaround is:
-//   linker64\0pathname\0argv[1]\0argv[2]\0...
-// We skip 1 entry (linker64 path) and return entry[1] (pathname),
-// which is the absolute path of the loaded binary.
-static int read_self_argv0(char* buf, size_t size) {
-    int fd = syscall(SYS_openat, AT_FDCWD, "/proc/self/cmdline", O_RDONLY, 0);
-    if (fd < 0) return -1;
-    ssize_t n = read(fd, buf, size - 1);
-    close(fd);
-    if (n <= 0) return -1;
-    buf[n] = '\0';
-
-    // Skip 1 entry (linker64 path at index 0)
-    size_t pos = 0;
-    int entry = 0;
-    while (pos < (size_t)n && entry < 1) {
-        if (buf[pos] == '\0') entry++;
-        pos++;
-    }
-    if (pos < (size_t)n) {
-        // Shift entry[1] (pathname) to start of buffer
-        memmove(buf, buf + pos, n - pos + 1);
-        return 0;
-    }
-    return -1;
-}
-
-// Resolve /proc/self/exe to the actual executable path.
-// When executables are launched via /system/bin/linker64 (our execve
-// workaround), /proc/self/exe points to the linker binary, not the
-// actual executable. This confuses tools like clang that use
-// /proc/self/exe to determine their installation directory.
-// We detect this by checking if the real /proc/self/exe is a linker,
-// and if so, return argv[0] from /proc/self/cmdline instead.
-// Returns the resolved path length, or 0 if no interception needed.
-static ssize_t resolve_proc_self_exe(const char* pathname, char* real_exe, size_t real_size) {
-    if (!pathname || strcmp(pathname, "/proc/self/exe") != 0) return 0;
-
-    // Use direct syscall to avoid recursion through our own readlinkat
-    ssize_t len = syscall(SYS_readlinkat, AT_FDCWD, pathname, real_exe, real_size - 1);
-    if (len <= 0) return 0;
-    real_exe[len] = '\0';
-
-    if (!is_linker_path(real_exe)) return 0; // Normal case, not a linker
-
-    // /proc/self/exe points to linker — try argv[0] instead
-    char argv0[4096];
-    if (read_self_argv0(argv0, sizeof(argv0)) != 0 || argv0[0] == '\0') return 0;
-
-    if (argv0[0] == '/') {
-        // Absolute path — use directly
-        size_t alen = strlen(argv0);
-        if (alen >= real_size) alen = real_size - 1;
-        memcpy(real_exe, argv0, alen);
-        real_exe[alen] = '\0';
-        return alen;
-    }
-
-    // Relative path: search PATH for the executable
-    char* path_env = getenv("PATH");
-    if (!path_env) return 0;
-
-    // Copy PATH before tokenizing (strtok_r modifies in-place)
-    char path_copy[4096];
-    strncpy(path_copy, path_env, sizeof(path_copy) - 1);
-    path_copy[sizeof(path_copy) - 1] = '\0';
-
-    char* save = NULL;
-    char* tok = strtok_r(path_copy, ":", &save);
-    while (tok) {
-        char candidate[4096];
-        snprintf(candidate, sizeof(candidate), "%s/%s", tok, argv0);
-        if (access(candidate, X_OK) == 0) {
-            size_t clen = strlen(candidate);
-            if (clen >= real_size) clen = real_size - 1;
-            memcpy(real_exe, candidate, clen);
-            real_exe[clen] = '\0';
-            return clen;
-        }
-        tok = strtok_r(NULL, ":", &save);
-    }
-    return 0;
-}
-
 // Intercept readlink() — dpkg reads symlinks for conffile handling.
-// Also handles /proc/self/exe via resolve_proc_self_exe().
+// Also remaps old Termux paths.
 ssize_t readlink(const char* pathname, char* buf, size_t size) {
-    // Check for /proc/self/exe interception
-    char resolved[4096];
-    ssize_t rlen = resolve_proc_self_exe(pathname, resolved, sizeof(resolved));
-    if (rlen > 0) {
-        if ((size_t)rlen >= size) rlen = size - 1;
-        memcpy(buf, resolved, rlen);
-        buf[rlen] = '\0';
-        return rlen;
-    }
-
     static ssize_t (*real_readlink)(const char*, char*, size_t) = NULL;
     if (!real_readlink) {
         real_readlink = dlsym(RTLD_NEXT, "readlink");
@@ -644,18 +328,7 @@ ssize_t readlink(const char* pathname, char* buf, size_t size) {
 }
 
 // Intercept readlinkat() — alternative to readlink()
-// Also handles /proc/self/exe via resolve_proc_self_exe().
 ssize_t readlinkat(int dirfd, const char* pathname, char* buf, size_t size) {
-    // Check for /proc/self/exe interception
-    char resolved[4096];
-    ssize_t rlen = resolve_proc_self_exe(pathname, resolved, sizeof(resolved));
-    if (rlen > 0) {
-        if ((size_t)rlen >= size) rlen = size - 1;
-        memcpy(buf, resolved, rlen);
-        buf[rlen] = '\0';
-        return rlen;
-    }
-
     static ssize_t (*real_readlinkat)(int, const char*, char*, size_t) = NULL;
     if (!real_readlinkat) {
         real_readlinkat = dlsym(RTLD_NEXT, "readlinkat");
@@ -739,7 +412,10 @@ int unlinkat(int dirfd, const char* pathname, int flags) {
 }
 
 // ============================================================
-// Exec function interceptions
+// Exec function interceptions — simplified: only remap old paths,
+// no linker64 redirect. The kernel allows direct exec of app data
+// binaries from subprocesses on Android 16+. The initial shell
+// exec is handled by termux.c's linker64 fallback.
 // ============================================================
 int execve(const char* pathname, char* const argv[], char* const envp[]) {
     // Remap old Termux paths to current package path
@@ -749,13 +425,11 @@ int execve(const char* pathname, char* const argv[], char* const envp[]) {
         int dot_slash = 0;
         if (p[0] == '.' && p[1] == '/') { p += 2; dot_slash = 1; }
         if (strncmp(p, OLD_TERMUX_PREFIX_REL, strlen(OLD_TERMUX_PREFIX_REL)) == 0) {
-            // Relative form: data/data/com.termux/...
             if (dot_slash)
                 snprintf(remapped, sizeof(remapped), "./%s/%s", APP_DATA_PREFIX, p + strlen(OLD_TERMUX_PREFIX_REL));
             else
                 snprintf(remapped, sizeof(remapped), "%s/%s", APP_DATA_PREFIX, p + strlen(OLD_TERMUX_PREFIX_REL));
         } else {
-            // Absolute form: /data/data/com.termux/...
             if (dot_slash)
                 snprintf(remapped, sizeof(remapped), "./%s%s", APP_DATA_PREFIX, p + strlen(OLD_TERMUX_PREFIX));
             else
@@ -764,44 +438,15 @@ int execve(const char* pathname, char* const argv[], char* const envp[]) {
         pathname = remapped;
     }
 
+    static execve_func_t real_execve = NULL;
     if (!real_execve) {
         real_execve = (execve_func_t)dlsym(RTLD_NEXT, "execve");
         if (!real_execve) _exit(127);
     }
-
-    if (is_app_data_path(pathname)) {
-        if (is_elf_binary(pathname)) {
-            // ELF binary -> redirect through system linker
-            // For apt/apt-get, inject -o flags to override compiled-in paths
-            char** new_argv = is_apt_command(pathname)
-                ? build_linker_argv_for_apt(pathname, argv)
-                : build_linker_argv(pathname, argv);
-            if (new_argv) {
-                int ret = real_execve(SYSTEM_LINKER, new_argv, envp);
-                free(new_argv);
-                return ret;
-            }
-        } else {
-            // Check if it's a script with shebang
-            char interp[384];
-            if (parse_shebang(pathname, interp, sizeof(interp)) == 0) {
-                // Script -> run interpreter via linker64 with script as arg
-                // This avoids the kernel's shebang handling which would fail
-                // when trying to exec the interpreter from app data
-                char** new_argv = build_linker_argv_for_interp(interp, pathname, argv);
-                if (new_argv) {
-                    int ret = real_execve(SYSTEM_LINKER, new_argv, envp);
-                    free(new_argv);
-                    return ret;
-                }
-            }
-        }
-    }
-
     return real_execve(pathname, argv, envp);
 }
 
-// Intercepted execvp — handles PATH-relative lookups
+// Intercepted execvp — only remaps old paths, no linker64 redirect.
 int execvp(const char* file, char* const argv[]) {
     // Remap old Termux paths to current package path
     char remapped[4096];
@@ -823,27 +468,5 @@ int execvp(const char* file, char* const argv[]) {
         real_execvp = (execvp_func_t)dlsym(RTLD_NEXT, "execvp");
         if (!real_execvp) _exit(127);
     }
-    // Ensure real_execve is resolved
-    if (!real_execve) {
-        real_execve = (execve_func_t)dlsym(RTLD_NEXT, "execve");
-        if (!real_execve) _exit(127);
-    }
-
-    // If the path contains a slash, it's an absolute/relative path
-    if (file && strchr(file, '/')) {
-        if (is_app_data_path(file)) {
-            // Build linker64 argv for the target (same as execve does for ELF)
-            char** new_argv = build_linker_argv(file, argv);
-            if (new_argv) {
-                // Call real_execve directly — NOT our intercepted execve
-                int ret = real_execve(SYSTEM_LINKER, new_argv, environ);
-                free(new_argv);
-                return ret;
-            }
-        }
-        return real_execvp(file, argv);
-    }
-
-    // No slash: let the real execvp handle PATH search
     return real_execvp(file, argv);
 }
