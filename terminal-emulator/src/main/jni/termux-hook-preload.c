@@ -102,6 +102,24 @@ static int parse_shebang(const char* path, char* interp, size_t interp_size) {
     return 0;
 }
 
+// Build new argv for executing an ELF binary through linker64:
+// [linker64, pathname, original_argv[1..n], NULL]
+static char** build_linker_argv(const char* pathname, char* const argv[]) {
+    int argc = 0;
+    while (argv && argv[argc]) argc++;
+
+    char** new_argv = malloc((argc + 3) * sizeof(char*));
+    if (!new_argv) return NULL;
+
+    new_argv[0] = (char*)SYSTEM_LINKER;
+    new_argv[1] = (char*)pathname;
+    // Skip argv[0] — linker provides pathname as argv[0]
+    for (int i = 1; i <= argc; i++) {
+        new_argv[i + 1] = argv[i];
+    }
+    return new_argv;
+}
+
 // Build new argv for executing a script through linker64 via its interpreter:
 // [linker64, interpreter_path, script_path, original_argv[1..n], NULL]
 static char** build_linker_argv_for_interp(const char* interp, const char* script,
@@ -516,6 +534,22 @@ int execve(const char* pathname, char* const argv[], char* const envp[]) {
                 free(new_argv);
                 return ret;
             }
+        }
+    }
+
+    // For ELF binaries in app data: try direct exec first (works when
+    // parent process was loaded through DT_INTERP), fall back to linker64
+    // if kernel blocks direct exec (e.g. when parent was loaded via linker64
+    // from termux.c's initial shell).
+    if (is_app_data_path(pathname) && is_elf_binary(pathname)) {
+        int ret = real_execve(pathname, argv, envp);
+        if (ret != -1) return ret;
+        // EACCES: fall back to linker64
+        char** new_argv = build_linker_argv(pathname, argv);
+        if (new_argv) {
+            ret = real_execve(SYSTEM_LINKER, new_argv, envp);
+            free(new_argv);
+            return ret;
         }
     }
 
