@@ -775,7 +775,7 @@ final class TermuxInstaller {
         pySb.append("                    os.makedirs(os.path.dirname(dest), exist_ok=True)\n");
         pySb.append("                    with open(dest, 'wb') as f:\n");
         pySb.append("                        f.write(rf.read())\n");
-        pySb.append("            os.chmod(dest, member.mode & 0o7777)\n");
+        pySb.append("                    os.chmod(dest, member.mode & 0o7777)\n");
         pySb.append("proc.wait()\n");
 
         File pyHelperFile = new File(binDir, "termux-install-deb.py");
