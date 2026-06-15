@@ -868,6 +868,8 @@ final class TermuxInstaller {
         depsSb.append("done\n");
         depsSb.append("install_deb openjdk-17 || exit 1\n");
         depsSb.append("install_deb apksigner || exit 1\n");
+        depsSb.append("# Fix apksigner shebang (Termux deb installs with com.termux paths)\n");
+        depsSb.append("sed -i 's|/data/data/com.termux|/data/data/com.sm64builder|g' $PREFIX/bin/apksigner 2>/dev/null\n");
         depsSb.append("install_deb make || echo \"  Warning: make failed\"\n");
         depsSb.append("install_deb getconf || echo \"  Warning: getconf failed\"\n");
         depsSb.append("install_deb which || echo \"  Warning: which failed\"\n");
@@ -894,20 +896,35 @@ final class TermuxInstaller {
         depsSb.append("echo \"[5/6] Downloading SDL2 and GLES2 headers...\"\n");
         depsSb.append("SDLDIR=$PREFIX/home/sm64-izzys-port-android/SDL/include/SDL2\n");
         depsSb.append("mkdir -p \"$SDLDIR\"\n");
-        depsSb.append("SDL_BASE=\"https://raw.githubusercontent.com/libsdl-org/SDL/release-2.30.9/include\"\n");
-        depsSb.append("for hdr in SDL.h SDL_stdinc.h SDL_error.h SDL_assert.h SDL_log.h SDL_platform.h \\\n");
-        depsSb.append("  SDL_endian.h SDL_atomic.h SDL_mutex.h SDL_thread.h SDL_rwops.h SDL_audio.h \\\n");
-        depsSb.append("  SDL_timer.h SDL_events.h SDL_video.h SDL_render.h SDL_joystick.h \\\n");
-        depsSb.append("  SDL_gamecontroller.h SDL_haptic.h SDL_hints.h SDL_pixels.h SDL_rect.h \\\n");
-        depsSb.append("  SDL_blendmode.h SDL_surface.h SDL_filesystem.h SDL_system.h SDL_version.h \\\n");
-        depsSb.append("  SDL_keyboard.h SDL_mouse.h SDL_keycode.h SDL_scancode.h SDL_main.h \\\n");
-        depsSb.append("  SDL_config.h SDL_config_android.h SDL_cpuinfo.h SDL_egl.h SDL_gesture.h \\\n");
-        depsSb.append("  SDL_guid.h SDL_hidapi.h SDL_loadso.h SDL_locale.h SDL_messagebox.h \\\n");
-        depsSb.append("  SDL_metal.h SDL_misc.h SDL_name.h SDL_opengl.h SDL_opengles.h \\\n");
-        depsSb.append("  SDL_opengles2.h SDL_power.h SDL_sensor.h SDL_shape.h SDL_touch.h \\\n");
-        depsSb.append("  SDL_types.h SDL_vulkan.h begin_code.h close_code.h; do\n");
-        depsSb.append("  curl -sfL \"$SDL_BASE/$hdr\" -o \"$SDLDIR/$hdr\" 2>/dev/null || echo \"  WARN: $hdr failed\"\n");
-        depsSb.append("done\n");
+        depsSb.append("# Download all 91 SDL2 headers via Python (complete list, curl handles HTTPS)\n");
+        depsSb.append("python3 -c \"\n");
+        depsSb.append("import os\n");
+        depsSb.append("headers = '''SDL.h SDL_assert.h SDL_atomic.h SDL_audio.h SDL_bits.h SDL_blendmode.h\n");
+        depsSb.append("SDL_clipboard.h SDL_config.h SDL_config_android.h SDL_config_emscripten.h\n");
+        depsSb.append("SDL_config_iphoneos.h SDL_config_macosx.h SDL_config_minimal.h SDL_config_ngage.h\n");
+        depsSb.append("SDL_config_os2.h SDL_config_pandora.h SDL_config_windows.h SDL_config_wingdk.h\n");
+        depsSb.append("SDL_config_winrt.h SDL_config_xbox.h SDL_copying.h SDL_cpuinfo.h SDL_egl.h\n");
+        depsSb.append("SDL_endian.h SDL_error.h SDL_events.h SDL_filesystem.h SDL_gamecontroller.h\n");
+        depsSb.append("SDL_gesture.h SDL_guid.h SDL_haptic.h SDL_hidapi.h SDL_hints.h SDL_joystick.h\n");
+        depsSb.append("SDL_keyboard.h SDL_keycode.h SDL_loadso.h SDL_locale.h SDL_log.h SDL_main.h\n");
+        depsSb.append("SDL_messagebox.h SDL_metal.h SDL_misc.h SDL_mouse.h SDL_mutex.h SDL_name.h\n");
+        depsSb.append("SDL_opengl.h SDL_opengl_glext.h SDL_opengles.h SDL_opengles2.h\n");
+        depsSb.append("SDL_opengles2_gl2.h SDL_opengles2_gl2ext.h SDL_opengles2_gl2platform.h\n");
+        depsSb.append("SDL_opengles2_khrplatform.h SDL_pixels.h SDL_platform.h SDL_power.h SDL_quit.h\n");
+        depsSb.append("SDL_rect.h SDL_render.h SDL_revision.h SDL_rwops.h SDL_scancode.h SDL_sensor.h\n");
+        depsSb.append("SDL_shape.h SDL_stdinc.h SDL_surface.h SDL_system.h SDL_syswm.h\n");
+        depsSb.append("SDL_test.h SDL_test_assert.h SDL_test_common.h SDL_test_compare.h\n");
+        depsSb.append("SDL_test_crc32.h SDL_test_font.h SDL_test_fuzzer.h SDL_test_harness.h\n");
+        depsSb.append("SDL_test_images.h SDL_test_log.h SDL_test_md5.h SDL_test_memory.h\n");
+        depsSb.append("SDL_test_random.h SDL_thread.h SDL_timer.h SDL_touch.h SDL_types.h\n");
+        depsSb.append("SDL_version.h SDL_video.h SDL_vulkan.h begin_code.h close_code.h'''\n");
+        depsSb.append("base = 'https://raw.githubusercontent.com/libsdl-org/SDL/release-2.30.9/include'\n");
+        depsSb.append("dest = '$SDLDIR'\n");
+        depsSb.append("for h in headers.split():\n");
+        depsSb.append("    os.system(f'curl -sfL \\\"{base}/{h}\\\" -o \\\"{dest}/{h}\\\" 2>/dev/null')\n");
+        depsSb.append("    if not os.path.exists(f'{dest}/{h}'):\n");
+        depsSb.append("        print(f'  WARN: {h}')\n");
+        depsSb.append("\"\n");
         depsSb.append("echo \"  SDL2 headers: $(ls \"$SDLDIR\" | wc -l) files\"\n");
         depsSb.append("\n");
         depsSb.append("# GLES2 headers (from Khronos registry)\n");
@@ -942,6 +959,22 @@ final class TermuxInstaller {
         depsSb.append("exec clang -c -x assembler \"${CLANG_FLAGS[@]}\"\n");
         depsSb.append("ASWRAP\n");
         depsSb.append("chmod +x $PREFIX/bin/as\n");
+        depsSb.append("# Create zip wrapper (make uses 'zip -r' for APK packaging)\n");
+        depsSb.append("cat > $PREFIX/bin/zip << 'ZIPEOF'\n");
+        depsSb.append("#!/data/data/com.sm64builder/files/usr/bin/python3\n");
+        depsSb.append("import zipfile, sys, os\n");
+        depsSb.append("start = 2 if len(sys.argv) > 2 and sys.argv[1] == '-r' else 1\n");
+        depsSb.append("out = sys.argv[start]\n");
+        depsSb.append("with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as z:\n");
+        depsSb.append("    for item in sys.argv[start+1:]:\n");
+        depsSb.append("        if os.path.isfile(item):\n");
+        depsSb.append("            z.write(item)\n");
+        depsSb.append("        elif os.path.isdir(item):\n");
+        depsSb.append("            for root, dirs, files in os.walk(item):\n");
+        depsSb.append("                for f in files:\n");
+        depsSb.append("                    z.write(os.path.join(root, f))\n");
+        depsSb.append("ZIPEOF\n");
+        depsSb.append("chmod +x $PREFIX/bin/zip\n");
         depsSb.append("\n");
         depsSb.append("# ── Done ──\n");
         depsSb.append("touch \"$SENTINEL\"\n");
@@ -1025,9 +1058,9 @@ final class TermuxInstaller {
                     changed = true;
                 }
 
-                // Patch 4: after source download, patch MakefileINT to use python3
+                // Patch 4: after source download, patch both Makefiles
                 String afterWget = "os.rename('sm64-izzys-port-android-ex-nightly', 'sm64-izzys-port-android')\"";
-                String makefilePatch = "\n# Patch MakefileINT: use python3 for extract_assets.py (shebang not found on Android)\n"
+                String makefilePatch = "\n# Patch Makefiles\n"
                     + "sed -i 's|\\./extract_assets\\.py|python3 extract_assets.py|g' sm64-izzys-port-android/MakefileINT 2>/dev/null\n"
                     + "sed -i 's|\\./extract_assets\\.py|python3 extract_assets.py|g' sm64-izzys-port-android/Makefile 2>/dev/null\n";
                 if (content.contains(afterWget) && !content.contains("sed -i 's|\\./extract_assets\\.py|python3")) {
@@ -1036,15 +1069,7 @@ final class TermuxInstaller {
                     changed = true;
                 }
 
-                // Patch 5: replace zip command with python equivalent
-                String zipLine = "zip -r ../../../$@ ./*";
-                String pythonZip = "python3 -c \"import zipfile,os; zf=zipfile.ZipFile('../../../$@','w',zipfile.ZIP_DEFLATED); [zf.write(f) for f in os.listdir('.') if os.path.isfile(f)]; zf.close()\"";
-                if (content.contains(zipLine) && !content.contains("python3.*zipfile")) {
-                    content = content.replace(zipLine, pythonZip);
-                    changed = true;
-                }
-
-                // Patch 6: skip pkg upgrade (dpkg configure broken on termux-exec)
+                // Patch 5: skip pkg upgrade (dpkg configure broken on termux-exec)
                 String oldPkgUpgrade = "yes | pkg upgrade -y";
                 if (content.contains(oldPkgUpgrade)) {
                     content = content.replace(oldPkgUpgrade, "# pkg upgrade skipped");
