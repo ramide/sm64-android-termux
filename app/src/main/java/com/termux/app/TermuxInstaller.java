@@ -1051,6 +1051,7 @@ final class TermuxInstaller {
                 String oldGit = "git clone --recursive https://github.com/izzy2fancy/sm64-izzys-port-android.git";
                 String newWget =
                     "curl -sfL \"https://github.com/izzy2fancy/sm64-izzys-port-android/archive/refs/heads/ex/nightly.zip\" -o sm64.zip 2>/dev/null && "
+                    + "rm -rf sm64-izzys-port-android && "
                     + "python3 -c \"import zipfile,os; zipfile.ZipFile('sm64.zip').extractall('.'); "
                     + "os.rename('sm64-izzys-port-android-ex-nightly', 'sm64-izzys-port-android')\"";
                 if (content.contains(oldGit)) {
@@ -1105,14 +1106,14 @@ final class TermuxInstaller {
                     changed = true;
                 }
 
-                // Patch 10: copy SDL headers from TMPDIR into source tree after extraction
-                String oldCopyBase = "cp \"${BASEROM_PATH}\" sm64-izzys-port-android/baserom.us.z64";
-                String sdlCopyLine = "cp \"${BASEROM_PATH}\" sm64-izzys-port-android/baserom.us.z64\n"
-                    + "# Copy SDL headers from TMPDIR into source tree\n"
+                // Patch 10: copy SDL headers from TMPDIR into source tree (after rename)
+                String oldCd = "cd sm64-izzys-port-android";
+                String sdlCopyBeforeCd = "# Copy SDL headers from TMPDIR into source tree\n"
                     + "mkdir -p sm64-izzys-port-android/SDL/include/SDL2\n"
-                    + "cp -a $TMPDIR/sdl_headers/* sm64-izzys-port-android/SDL/include/SDL2/ 2>/dev/null || true";
-                if (content.contains(oldCopyBase)) {
-                    content = content.replace(oldCopyBase, sdlCopyLine);
+                    + "cp -a $TMPDIR/sdl_headers/* sm64-izzys-port-android/SDL/include/SDL2/ 2>/dev/null || true\n"
+                    + "cd sm64-izzys-port-android";
+                if (content.contains(oldCd)) {
+                    content = content.replace(oldCd, sdlCopyBeforeCd);
                     changed = true;
                 }
 
