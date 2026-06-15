@@ -1,0 +1,3 @@
+[submodule "termux-am-library"]
+	path = termux-am-library
+	url = https://github.com/termux/termux-am-library.git
