@@ -775,6 +775,7 @@ final class TermuxInstaller {
         pySb.append("                    os.makedirs(os.path.dirname(dest), exist_ok=True)\n");
         pySb.append("                    with open(dest, 'wb') as f:\n");
         pySb.append("                        f.write(rf.read())\n");
+        pySb.append("            os.chmod(dest, member.mode & 0o7777)\n");
         pySb.append("proc.wait()\n");
 
         File pyHelperFile = new File(binDir, "termux-install-deb.py");
@@ -891,7 +892,7 @@ final class TermuxInstaller {
         depsSb.append("\n");
         depsSb.append("# ── 5. Download SDL2 headers ──\n");
         depsSb.append("echo \"[5/6] Downloading SDL2 and GLES2 headers...\"\n");
-        depsSb.append("SDLDIR=$PREFIX/home/sm64-izzys-port-android-ex-nightly/SDL/include/SDL2\n");
+        depsSb.append("SDLDIR=$PREFIX/home/sm64-izzys-port-android/SDL/include/SDL2\n");
         depsSb.append("mkdir -p \"$SDLDIR\"\n");
         depsSb.append("SDL_BASE=\"https://raw.githubusercontent.com/libsdl-org/SDL/release-2.30.9/include\"\n");
         depsSb.append("for hdr in SDL.h SDL_stdinc.h SDL_error.h SDL_assert.h SDL_log.h SDL_platform.h \\\n");
