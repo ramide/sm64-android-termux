@@ -1006,7 +1006,7 @@ final class TermuxInstaller {
                 // Patch 3: git clone -> wget + python3
                 String oldGit = "git clone --recursive https://github.com/izzy2fancy/sm64-izzys-port-android.git";
                 String newWget =
-                    "wget -q -O sm64.zip \"https://github.com/izzy2fancy/sm64-izzys-port-android/archive/refs/heads/ex/nightly.zip\" && "
+                    "curl -sfL \"https://github.com/izzy2fancy/sm64-izzys-port-android/archive/refs/heads/ex/nightly.zip\" -o sm64.zip 2>/dev/null && "
                     + "python3 -c \"import zipfile,os; zipfile.ZipFile('sm64.zip').extractall('.'); "
                     + "os.rename('sm64-izzys-port-android-ex-nightly', 'sm64-izzys-port-android')\"";
                 if (content.contains(oldGit)) {
@@ -1030,6 +1030,21 @@ final class TermuxInstaller {
                 String pythonZip = "python3 -c \"import zipfile,os; zf=zipfile.ZipFile('../../../$@','w',zipfile.ZIP_DEFLATED); [zf.write(f) for f in os.listdir('.') if os.path.isfile(f)]; zf.close()\"";
                 if (content.contains(zipLine) && !content.contains("python3.*zipfile")) {
                     content = content.replace(zipLine, pythonZip);
+                    changed = true;
+                }
+
+                // Patch 6: skip pkg upgrade (dpkg configure broken on termux-exec)
+                String oldPkgUpgrade = "yes | pkg upgrade -y";
+                if (content.contains(oldPkgUpgrade)) {
+                    content = content.replace(oldPkgUpgrade, "# pkg upgrade skipped");
+                    changed = true;
+                }
+
+                // Patch 7: copy APK to HOME instead of /storage/emulated/0 (Permission denied)
+                String oldApkCopy = "cp build/us_pc/sm64.us.f3dex2e.apk /storage/emulated/0";
+                String newApkCopy = "cp build/us_pc/sm64.us.f3dex2e.apk $HOME/";
+                if (content.contains(oldApkCopy)) {
+                    content = content.replace(oldApkCopy, newApkCopy);
                     changed = true;
                 }
 
