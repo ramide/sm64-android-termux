@@ -869,6 +869,8 @@ final class TermuxInstaller {
         depsSb.append("install_deb make || echo \"  Warning: make failed\"\n");
         depsSb.append("install_deb getconf || echo \"  Warning: getconf failed\"\n");
         depsSb.append("install_deb which || echo \"  Warning: which failed\"\n");
+        depsSb.append("# Install clang via apt-get (handles complex transitive deps)\n");
+        depsSb.append("apt-get install -y clang libc++ 2>/dev/null || echo \"  Warning: clang/libc++ install failed\"\n");
         depsSb.append("\n");
         depsSb.append("# ── 4. Create java wrapper ──\n");
         depsSb.append("echo \"[4/6] Creating java wrapper...\"\n");
