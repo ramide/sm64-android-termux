@@ -648,7 +648,8 @@ final class TermuxInstaller {
         sb.append("PATH=$PREFIX/bin:/system/bin\n");
         sb.append("LD_LIBRARY_PATH=$PREFIX/lib\n");
         sb.append("LD_PRELOAD=$PREFIX/lib/libtermux-exec-hook.so\n");
-        sb.append("export PREFIX PATH LD_LIBRARY_PATH LD_PRELOAD\n");
+        sb.append("TMPDIR=$PREFIX/tmp\n");
+        sb.append("export PREFIX PATH LD_LIBRARY_PATH LD_PRELOAD TMPDIR\n");
         sb.append("mkdir -p ~/.termux 2>/dev/null\n");
         sb.append("ln -sf $PREFIX/etc/motd.sh ~/.termux/motd.sh 2>/dev/null\n");
         sb.append("\n");
@@ -871,6 +872,10 @@ final class TermuxInstaller {
         depsSb.append("install_deb which || echo \"  Warning: which failed\"\n");
         depsSb.append("# Install clang via apt-get (handles complex transitive deps)\n");
         depsSb.append("apt-get install -y clang libc++ 2>/dev/null || echo \"  Warning: clang/libc++ install failed\"\n");
+        depsSb.append("# Force-extract ndk-sysroot (apt-get may register without extracting files)\n");
+        depsSb.append("apt-get download ndk-sysroot 2>/dev/null\n");
+        depsSb.append("ndk_deb=$(ls ndk-sysroot_*.deb 2>/dev/null | head -1)\n");
+        depsSb.append("[ -n \"$ndk_deb\" ] && python3 $PREFIX/bin/termux-install-deb.py \"$ndk_deb\" 2>/dev/null; rm -f \"$ndk_deb\"\n");
         depsSb.append("\n");
         depsSb.append("# ── 4. Create java wrapper ──\n");
         depsSb.append("echo \"[4/6] Creating java wrapper...\"\n");
