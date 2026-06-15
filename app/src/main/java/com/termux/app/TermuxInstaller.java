@@ -1141,6 +1141,14 @@ final class TermuxInstaller {
                     changed = true;
                 }
 
+                // Patch 12: safety net for compilation (stdlib.h not found workaround)
+                String oldMake = "make 2>&1 | tee build.log";
+                String safeMake = "C_INCLUDE_PATH=$PREFIX/include make 2>&1 | tee build.log";
+                if (content.contains(oldMake)) {
+                    content = content.replace(oldMake, safeMake);
+                    changed = true;
+                }
+
                 if (changed) {
                     java.io.FileOutputStream fos = new java.io.FileOutputStream(scriptFile);
                     fos.write(content.getBytes("UTF-8"));
