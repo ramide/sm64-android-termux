@@ -866,6 +866,9 @@ final class TermuxInstaller {
         depsSb.append("done\n");
         depsSb.append("install_deb openjdk-17 || exit 1\n");
         depsSb.append("install_deb apksigner || exit 1\n");
+        depsSb.append("install_deb make || echo \"  Warning: make failed\"\n");
+        depsSb.append("install_deb getconf || echo \"  Warning: getconf failed\"\n");
+        depsSb.append("install_deb which || echo \"  Warning: which failed\"\n");
         depsSb.append("\n");
         depsSb.append("# ── 4. Create java wrapper ──\n");
         depsSb.append("echo \"[4/6] Creating java wrapper...\"\n");
