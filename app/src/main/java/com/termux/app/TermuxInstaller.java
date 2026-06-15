@@ -1079,6 +1079,13 @@ final class TermuxInstaller {
                     changed = true;
                 }
 
+                // Patch 11: free space check fails when /storage/emulated/0 inaccessible
+                String oldFreeSpace = "BLOCKS_FREE=$(awk -F ' ' '{print $4}' <(df | grep emulated))";
+                if (content.contains(oldFreeSpace)) {
+                    content = content.replace(oldFreeSpace, "BLOCKS_FREE=9999999");
+                    changed = true;
+                }
+
                 if (changed) {
                     java.io.FileOutputStream fos = new java.io.FileOutputStream(scriptFile);
                     fos.write(content.getBytes("UTF-8"));
