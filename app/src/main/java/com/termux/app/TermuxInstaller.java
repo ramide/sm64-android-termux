@@ -1048,6 +1048,32 @@ final class TermuxInstaller {
                     changed = true;
                 }
 
+                // Patch 8: git not available; skip git config
+                String oldGitConfig = "git config core.fileMode false";
+                if (content.contains(oldGitConfig)) {
+                    content = content.replace(oldGitConfig, "# git config skipped (git not installed)");
+                    changed = true;
+                }
+
+                // Patch 9: getSDL.sh has /bin/bash shebang (doesn't exist); SDL headers predownloaded
+                String oldGetSDL = "./getSDL.sh";
+                if (content.contains(oldGetSDL)) {
+                    content = content.replace(oldGetSDL, "# getSDL.sh skipped (SDL headers predownloaded by setup)");
+                    changed = true;
+                }
+
+                // Patch 10: apply_patch.sh needs /bin/bash and 'patch'; skip
+                String oldApplyPatch = "yes | tools/apply_patch.sh enhancements/60fps_ex.patch";
+                if (content.contains(oldApplyPatch)) {
+                    content = content.replace(oldApplyPatch, "# 60fps patch skipped (patch not installed)");
+                    changed = true;
+                }
+                String oldApplyPatch2 = "yes | tools/apply_patch.sh enhancements/DynOS.1.0.patch";
+                if (content.contains(oldApplyPatch2)) {
+                    content = content.replace(oldApplyPatch2, "# DynOS patch skipped (patch not installed)");
+                    changed = true;
+                }
+
                 if (changed) {
                     java.io.FileOutputStream fos = new java.io.FileOutputStream(scriptFile);
                     fos.write(content.getBytes("UTF-8"));
