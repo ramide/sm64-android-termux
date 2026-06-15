@@ -1,2 +1,2 @@
 include ':app', ':termux-shared', ':terminal-emulator', ':terminal-view', ':termux-am-library'
-project(':termux-am-library').projectDir = new File('termux-am-library/termux-am-library')
+project(':termux-am-library').projectDir = new File('libs/termux-am-library')
