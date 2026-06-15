@@ -1084,7 +1084,14 @@ final class TermuxInstaller {
                     changed = true;
                 }
 
-                // Patch 8: git not available; skip git config
+                // Patch 8: force fresh download (SDL headers predownload creates the directory)
+                String oldIfDir = "if [ -d \"sm64-izzys-port-android\" ]";
+                if (content.contains(oldIfDir)) {
+                    content = content.replace(oldIfDir, "if false");
+                    changed = true;
+                }
+
+                // Patch 9: git not available; skip git config (in else branch)
                 String oldGitConfig = "git config core.fileMode false";
                 if (content.contains(oldGitConfig)) {
                     content = content.replace(oldGitConfig, "# git config skipped (git not installed)");
