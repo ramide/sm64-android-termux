@@ -959,16 +959,14 @@ final class TermuxInstaller {
         depsSb.append("exec clang -c -x assembler \"${CLANG_FLAGS[@]}\"\n");
         depsSb.append("ASWRAP\n");
         depsSb.append("chmod +x $PREFIX/bin/as\n");
-        depsSb.append("# Create g++/gcc wrappers (unset LD_PRELOAD to avoid hook interference with clang)\n");
+        depsSb.append("# Create g++/gcc wrappers (some Makefiles like audiofile use these)\n");
         depsSb.append("cat > $PREFIX/bin/g++ << 'GXXEOF'\n");
         depsSb.append("#!/data/data/com.sm64builder/files/usr/bin/bash\n");
-        depsSb.append("unset LD_PRELOAD\n");
         depsSb.append("exec /data/data/com.sm64builder/files/usr/bin/clang++ \"$@\"\n");
         depsSb.append("GXXEOF\n");
         depsSb.append("chmod +x $PREFIX/bin/g++\n");
         depsSb.append("cat > $PREFIX/bin/gcc << 'GCCEOF'\n");
         depsSb.append("#!/data/data/com.sm64builder/files/usr/bin/bash\n");
-        depsSb.append("unset LD_PRELOAD\n");
         depsSb.append("exec /data/data/com.sm64builder/files/usr/bin/clang \"$@\"\n");
         depsSb.append("GCCEOF\n");
         depsSb.append("chmod +x $PREFIX/bin/gcc\n");
