@@ -959,6 +959,11 @@ final class TermuxInstaller {
         depsSb.append("exec clang -c -x assembler \"${CLANG_FLAGS[@]}\"\n");
         depsSb.append("ASWRAP\n");
         depsSb.append("chmod +x $PREFIX/bin/as\n");
+        depsSb.append("# Create g++/gcc symlinks (some Makefiles use these)\n");
+        depsSb.append("ln -sf $PREFIX/bin/clang++ $PREFIX/bin/g++ 2>/dev/null || true\n");
+        depsSb.append("ln -sf $PREFIX/bin/clang $PREFIX/bin/gcc 2>/dev/null || true\n");
+        depsSb.append("# Unset CLANG_RESOURCE_DIR (Termux sets it; let clang autodetect)\n");
+        depsSb.append("unset CLANG_RESOURCE_DIR 2>/dev/null || true\n");
         depsSb.append("# Create zip wrapper (make uses 'zip -r' for APK packaging)\n");
         depsSb.append("cat > $PREFIX/bin/zip << 'ZIPEOF'\n");
         depsSb.append("#!/data/data/com.sm64builder/files/usr/bin/python3\n");
