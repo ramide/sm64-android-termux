@@ -894,7 +894,7 @@ final class TermuxInstaller {
         depsSb.append("\n");
         depsSb.append("# ── 5. Download SDL2 headers ──\n");
         depsSb.append("echo \"[5/6] Downloading SDL2 and GLES2 headers...\"\n");
-        depsSb.append("SDLDIR=$PREFIX/home/sm64-izzys-port-android/SDL/include/SDL2\n");
+        depsSb.append("SDLDIR=$TMPDIR/sdl_headers\n");
         depsSb.append("mkdir -p \"$SDLDIR\"\n");
         depsSb.append("# Download all 91 SDL2 headers via Python (complete list, curl handles HTTPS)\n");
         depsSb.append("python3 -c \"\n");
@@ -1105,7 +1105,18 @@ final class TermuxInstaller {
                     changed = true;
                 }
 
-                // Patch 10: apply_patch.sh needs /bin/bash and 'patch'; skip
+                // Patch 10: copy SDL headers from TMPDIR into source tree after extraction
+                String oldCopyBase = "cp \"${BASEROM_PATH}\" sm64-izzys-port-android/baserom.us.z64";
+                String sdlCopyLine = "cp \"${BASEROM_PATH}\" sm64-izzys-port-android/baserom.us.z64\n"
+                    + "# Copy SDL headers from TMPDIR into source tree\n"
+                    + "mkdir -p sm64-izzys-port-android/SDL/include/SDL2\n"
+                    + "cp -a $TMPDIR/sdl_headers/* sm64-izzys-port-android/SDL/include/SDL2/ 2>/dev/null || true";
+                if (content.contains(oldCopyBase)) {
+                    content = content.replace(oldCopyBase, sdlCopyLine);
+                    changed = true;
+                }
+
+                // Patch 11: apply_patch.sh needs /bin/bash and 'patch'; skip
                 String oldApplyPatch = "yes | tools/apply_patch.sh enhancements/60fps_ex.patch";
                 if (content.contains(oldApplyPatch)) {
                     content = content.replace(oldApplyPatch, "# 60fps patch skipped (patch not installed)");
