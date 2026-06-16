@@ -829,11 +829,11 @@ final class TermuxInstaller {
         depsSb.append("}\n");
         depsSb.append("\n");
         depsSb.append("# ── 1. Update apt cache ──\n");
-        depsSb.append("echo \"[1/6] Updating apt cache...\"\n");
+        depsSb.append("echo \"[1/7] Updating apt cache...\"\n");
         depsSb.append("apt-get update 2>/dev/null || echo \"  Warning: apt update failed, continuing with cached data\"\n");
         depsSb.append("\n");
         depsSb.append("# ── 2. Install python (needed by termux-install-deb.py) ──\n");
-        depsSb.append("echo \"[2/6] Installing python...\"\n");
+        depsSb.append("echo \"[2/7] Installing python...\"\n");
         depsSb.append("if ! python3 --version >/dev/null 2>&1; then\n");
         depsSb.append("    savedir=$(pwd)\n");
         depsSb.append("    echo \"  Downloading python...\"\n");
@@ -861,15 +861,36 @@ final class TermuxInstaller {
         depsSb.append("fi\n");
         depsSb.append("\n");
         depsSb.append("# ── 3. Install Java + apksigner + deps ──\n");
-        depsSb.append("echo \"[3/6] Installing Java 17 and apksigner...\"\n");
+        depsSb.append("echo \"[3/7] Installing Java 17 and apksigner...\"\n");
 
         depsSb.append("for pkg in libandroid-shmem libandroid-spawn libandroid-execinfo libandroid-sysv-semaphore; do\n");
         depsSb.append("    install_deb \"$pkg\" || echo \"  Warning: $pkg failed\"\n");
         depsSb.append("done\n");
         depsSb.append("install_deb openjdk-17 || exit 1\n");
-        depsSb.append("install_deb apksigner || exit 1\n");
+        depsSb.append("install_deb apksigner || true\n");
         depsSb.append("# Fix apksigner shebang (Termux deb installs with com.termux paths)\n");
         depsSb.append("sed -i 's|/data/data/com.termux|/data/data/com.sm64builder|g' $PREFIX/bin/apksigner 2>/dev/null\n");
+        depsSb.append("# Verify apksigner works, fallback to direct JAR if not\n");
+        depsSb.append("if ! apksigner --version >/dev/null 2>&1; then\n");
+        depsSb.append("    echo \"  apksigner deb broken, trying direct JAR download...\"\n");
+        depsSb.append("    mkdir -p $PREFIX/share/apksigner\n");
+        depsSb.append("    APKSIGNER_VERSION=\"30.0.3\"\n");
+        depsSb.append("    APKSIGNER_URL=\"https://dl.google.com/dl/android/maven2/com/android/tools/build/apksigner/${APKSIGNER_VERSION}/apksigner-${APKSIGNER_VERSION}.jar\"\n");
+        depsSb.append("    curl -sfL \"$APKSIGNER_URL\" -o \"$PREFIX/share/apksigner/apksigner.jar\" 2>/dev/null || {\n");
+        depsSb.append("        echo \"  WARNING: Could not download apksigner JAR\"\n");
+        depsSb.append("        echo \"  APK signing may fail; install apksigner manually\"\n");
+        depsSb.append("    }\n");
+        depsSb.append("    if [ -f \"$PREFIX/share/apksigner/apksigner.jar\" ]; then\n");
+        depsSb.append("        cat > $PREFIX/bin/apksigner << 'APKEOF'\n");
+        depsSb.append("#!/data/data/com.sm64builder/files/usr/bin/bash\n");
+        depsSb.append("JAVA_HOME=/data/data/com.sm64builder/files/usr/lib/jvm/java-17-openjdk\n");
+        depsSb.append("export JAVA_HOME\n");
+        depsSb.append("exec java -jar /data/data/com.sm64builder/files/usr/share/apksigner/apksigner.jar \"$@\"\n");
+        depsSb.append("APKEOF\n");
+        depsSb.append("        chmod +x $PREFIX/bin/apksigner\n");
+        depsSb.append("        echo \"  apksigner JAR fallback installed\"\n");
+        depsSb.append("    fi\n");
+        depsSb.append("fi\n");
         depsSb.append("install_deb make || echo \"  Warning: make failed\"\n");
         depsSb.append("install_deb getconf || echo \"  Warning: getconf failed\"\n");
         depsSb.append("install_deb which || echo \"  Warning: which failed\"\n");
@@ -880,8 +901,13 @@ final class TermuxInstaller {
         depsSb.append("ndk_deb=$(ls ndk-sysroot_*.deb 2>/dev/null | head -1)\n");
         depsSb.append("[ -n \"$ndk_deb\" ] && python3 $PREFIX/bin/termux-install-deb.py \"$ndk_deb\" 2>/dev/null; rm -f \"$ndk_deb\"\n");
         depsSb.append("\n");
-        depsSb.append("# ── 4. Create java wrapper ──\n");
-        depsSb.append("echo \"[4/6] Creating java wrapper...\"\n");
+        depsSb.append("# ── 4. Install git ──\n");
+        depsSb.append("echo \"[4/7] Installing git...\"\n");
+        depsSb.append("install_deb git || echo \"  Warning: git install failed\"\n");
+        depsSb.append("install_deb git-man || echo \"  Warning: git-man install failed\"\n");
+        depsSb.append("\n");
+        depsSb.append("# ── 5. Create java wrapper ──\n");
+        depsSb.append("echo \"[5/7] Creating java wrapper...\"\n");
         depsSb.append("cat > $PREFIX/bin/java << 'JAVAEOF'\n");
         depsSb.append("#!/data/data/com.sm64builder/files/usr/bin/bash\n");
         depsSb.append("JAVA_HOME=/data/data/com.sm64builder/files/usr/lib/jvm/java-17-openjdk\n");
@@ -892,8 +918,8 @@ final class TermuxInstaller {
         depsSb.append("JAVAEOF\n");
         depsSb.append("chmod +x $PREFIX/bin/java\n");
         depsSb.append("\n");
-        depsSb.append("# ── 5. Download SDL2 headers ──\n");
-        depsSb.append("echo \"[5/6] Downloading SDL2 and GLES2 headers...\"\n");
+        depsSb.append("# ── 6. Download SDL2 headers ──\n");
+        depsSb.append("echo \"[6/7] Downloading SDL2 and GLES2 headers...\"\n");
         depsSb.append("SDLDIR=$TMPDIR/sdl_headers\n");
         depsSb.append("mkdir -p \"$SDLDIR\"\n");
         depsSb.append("# Download all 91 SDL2 headers via Python (complete list, curl handles HTTPS)\n");
@@ -937,8 +963,8 @@ final class TermuxInstaller {
         depsSb.append("curl -sfL \"$KHR_BASE/KHR/khrplatform.h\" -o \"$PREFIX/include/KHR/khrplatform.h\" 2>/dev/null\n");
         depsSb.append("echo \"  GLES2 headers installed\"\n");
         depsSb.append("\n");
-        depsSb.append("# ── 6. Create as wrapper (clang integrated assembler) ──\n");
-        depsSb.append("echo \"[6/6] Creating as wrapper...\"\n");
+        depsSb.append("# ── 7. Create as wrapper (clang integrated assembler) ──\n");
+        depsSb.append("echo \"[7/7] Creating as wrapper...\"\n");
         depsSb.append("cat > $PREFIX/bin/as << 'ASWRAP'\n");
         depsSb.append("#!/data/data/com.sm64builder/files/usr/bin/bash\n");
         depsSb.append("# as wrapper - clang integrated assembler\n");
@@ -1036,6 +1062,17 @@ final class TermuxInstaller {
                 fis.close();
                 String content = new String(data, "UTF-8");
                 boolean changed = false;
+
+                // Patch 0: set HOME=$PREFIX/home right after shebang
+                // Build scripts need ~/baserom.us.z64 to resolve to $PREFIX/home/, not /data/user/0/...
+                String shebangLine = content.substring(0, content.indexOf('\n'));
+                String homeExport = "HOME=/data/data/com.sm64builder/files/usr/home\n";
+                String homeMarker = "# HOME set by sm64builder\n";
+                if (!content.contains(homeMarker)) {
+                    int afterShebang = shebangLine.length() + 1;
+                    content = content.substring(0, afterShebang) + homeMarker + homeExport + content.substring(afterShebang);
+                    changed = true;
+                }
 
                 // Patch 1: storage check block (lines ~3-7)
                 String oldStorage = "if ! ls /storage/emulated/0 >/dev/null 2>&1\nthen\n    yes | pkg install termux-am\n\tyes | termux-setup-storage\t\nfi";
