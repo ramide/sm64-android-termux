@@ -47,15 +47,34 @@ typedef int (*execvp_func_t)(const char*, char* const[]);
 // The system linker executable (for exec'ing scripts through linker64)
 #define SYSTEM_LINKER "/system/bin/linker64"
 
-// Helper: check if path is in the app data directory
+// Helper: check if path is in the app data directory.
+// Handles absolute paths and relative paths (resolves via realpath).
 static int is_app_data_path(const char* path) {
-    size_t prefix_len = strlen(APP_DATA_PREFIX);
-    return path && strncmp(path, APP_DATA_PREFIX, prefix_len) == 0;
+    if (!path) return 0;
+    if (path[0] == '/') {
+        size_t prefix_len = strlen(APP_DATA_PREFIX);
+        return strncmp(path, APP_DATA_PREFIX, prefix_len) == 0;
+    }
+    // Relative path — resolve to absolute using realpath then check
+    char resolved[4096];
+    if (realpath(path, resolved)) {
+        size_t prefix_len = strlen(APP_DATA_PREFIX);
+        return strncmp(resolved, APP_DATA_PREFIX, prefix_len) == 0;
+    }
+    return 0;
 }
 
-// Helper: check if file is an ELF binary by reading its magic bytes
+// Helper: check if file is an ELF binary by reading its magic bytes.
+// Handles both absolute and relative paths (resolves via realpath).
 static int is_elf_binary(const char* path) {
-    int fd = open(path, O_RDONLY);
+    if (!path) return 0;
+    char resolved[4096];
+    const char* p = path;
+    if (path[0] != '/') {
+        if (!realpath(path, resolved)) return 0;
+        p = resolved;
+    }
+    int fd = open(p, O_RDONLY);
     if (fd < 0) return 0;
     char magic[4];
     int n = read(fd, magic, 4);
