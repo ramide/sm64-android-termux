@@ -805,7 +805,7 @@ final class TermuxInstaller {
         depsSb.append("\n");
         depsSb.append("# ── Check if already installed ──\n");
         depsSb.append("if [ -f \"$SENTINEL\" ]; then\n");
-        depsSb.append("    if python3 --version >/dev/null 2>&1 && java -version >/dev/null 2>&1 && apksigner --version >/dev/null 2>&1; then\n");
+        depsSb.append("    if python3 --version >/dev/null 2>&1 && java -version >/dev/null 2>&1 && apksigner --version >/dev/null 2>&1 && clang --version >/dev/null 2>&1 && make --version >/dev/null 2>&1 && git --version >/dev/null 2>&1; then\n");
         depsSb.append("        echo \"Build dependencies already installed. Skip.\"\n");
         depsSb.append("        exit 0\n");
         depsSb.append("    fi\n");
@@ -1120,9 +1120,13 @@ final class TermuxInstaller {
 
                 // Patch 4: after source download, patch both Makefiles
                 String afterWget = "os.rename('sm64-izzys-port-android-ex-nightly', 'sm64-izzys-port-android')\"";
-                String makefilePatch = "\n# Patch Makefiles\n"
+                String makefilePatch = "\n# Patch Makefiles and permissions\n"
                     + "sed -i 's|\\./extract_assets\\.py|python3 extract_assets.py|g' sm64-izzys-port-android/MakefileINT 2>/dev/null\n"
-                    + "sed -i 's|\\./extract_assets\\.py|python3 extract_assets.py|g' sm64-izzys-port-android/Makefile 2>/dev/null\n";
+                    + "sed -i 's|\\./extract_assets\\.py|python3 extract_assets.py|g' sm64-izzys-port-android/Makefile 2>/dev/null\n"
+                    + "chmod +x sm64-izzys-port-android/extract_assets.py 2>/dev/null || true\n"
+                    + "# Also patch hardcoded /data/data/com.termux/ paths in Makefiles\n"
+                    + "sed -i 's|/data/data/com\\.termux|/data/data/com.sm64builder|g' sm64-izzys-port-android/MakefileINT 2>/dev/null\n"
+                    + "sed -i 's|/data/data/com\\.termux|/data/data/com.sm64builder|g' sm64-izzys-port-android/Makefile 2>/dev/null\n";
                 if (content.contains(afterWget) && !content.contains("sed -i 's|\\./extract_assets\\.py|python3")) {
                     int idx = content.indexOf(afterWget) + afterWget.length();
                     content = content.substring(0, idx) + makefilePatch + content.substring(idx);
@@ -1195,9 +1199,9 @@ final class TermuxInstaller {
                     changed = true;
                 }
 
-                // Patch 12: safety net for compilation (stdlib.h not found workaround)
+                // Patch 12: safety net — add include path to clang's CPATH (clang respects CPATH, not C_INCLUDE_PATH)
                 String oldMake = "make 2>&1 | tee build.log";
-                String safeMake = "C_INCLUDE_PATH=$PREFIX/include make 2>&1 | tee build.log";
+                String safeMake = "CPATH=$PREFIX/include make 2>&1 | tee build.log";
                 if (content.contains(oldMake)) {
                     content = content.replace(oldMake, safeMake);
                     changed = true;
